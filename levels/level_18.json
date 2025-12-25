@@ -1,0 +1,45 @@
+{
+  "id": 18,
+  "tracks": [
+    [
+      "A",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "X",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "description": "Nivel 18: Medio. Cuidado con el espacio.",
+  "capacity": 6
+}

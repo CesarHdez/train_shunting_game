@@ -1,0 +1,49 @@
+{
+  "id": 25,
+  "tracks": [
+    [
+      "D",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "[",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "X",
+      "C",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Z",
+      "B",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Y",
+      "E",
+      "A",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "description": "Nivel 25: Dif\u00edcil. Espacio muy limitado.",
+  "capacity": 5
+}
