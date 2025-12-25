@@ -272,31 +272,214 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const game = new GameState();
 
+// Camera System
+const camera = {
+    x: 0,
+    y: 0,
+    zoom: 1,
+    isDragging: false,
+    lastX: 0,
+    lastY: 0,
+    lastPinchDist: 0
+};
+
 function resize() {
-    // Maintain aspect ratio or fill? Let's fill and center content logic
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // Auto-fit Logic: Center the 1024x768 "world" content
+    // We want the tracks (approx width 800) to fit.
+    const desiredVisibleWidth = 1024;
+    const scale = canvas.width / desiredVisibleWidth;
+
+    // Set initial zoom to fit width, but clamp it reasonable
+    // Only auto-zoom if it's the first load or if we want responsive reset
+    // For now: just set a reasonable default if not set? 
+    // Actually, let's just center the world.
+
+    // If mobile (portrait), we might need smaller zoom
+    if (canvas.width < 768) {
+        camera.zoom = canvas.width / 1024; // Shrink to fit
+    } else {
+        camera.zoom = 1;
+    }
+
+    // Center logic:
+    // visibleW = canvas.width / zoom
+    // We want CONFIG.DEFAULT_WIDTH/2 to be at canvas.width/2
+    // offset X = (canvas.width - CONFIG.DEFAULT_WIDTH * zoom) / 2
+    camera.x = (canvas.width - CONFIG.DEFAULT_WIDTH * camera.zoom) / 2;
+    camera.y = 50 * camera.zoom; // Slight top padding
 }
 window.addEventListener('resize', resize);
 resize();
 
 // Input Handling
+// Helper to get distance between two touch points
+function getPinchDist(t1, t2) {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Mouse Down / Touch Start
+function onPointerDown(x, y, isSecond = false) {
+    if (game.state === "MENU") return; // Menu handles its own scrolling/clicks roughly
+
+    camera.isDragging = true;
+    camera.lastX = x;
+    camera.lastY = y;
+}
+
+// Mouse Move / Touch Move
+function onPointerMove(x, y, isPinch = false, dist = 0) {
+    if (game.state === "MENU") return;
+    if (!camera.isDragging) return;
+
+    if (isPinch) {
+        // Handle Zoom
+        if (camera.lastPinchDist > 0) {
+            const delta = dist / camera.lastPinchDist;
+            const newZoom = camera.zoom * delta;
+
+            // Limit Zoom
+            if (newZoom > 0.4 && newZoom < 3.0) {
+                // Zoom towards center (simplified)
+                // To zoom towards specific point is complex without more state. 
+                // Let's just update zoom.
+                camera.zoom = newZoom;
+            }
+        }
+        camera.lastPinchDist = dist;
+    } else {
+        // Handle Pan
+        const dx = x - camera.lastX;
+        const dy = y - camera.lastY;
+        camera.x += dx;
+        camera.y += dy;
+        camera.lastX = x;
+        camera.lastY = y;
+    }
+}
+
+// Mouse Up / Touch End
+function onPointerUp() {
+    camera.isDragging = false;
+    camera.lastPinchDist = 0;
+}
+
+// Touch Events
+canvas.addEventListener('touchstart', (e) => {
+    // If 1 touch: click checking is done in 'click' or manual 'touchend' detection?
+    // Actually 'mousedown' logic above handles "clicks" but we need to distinguish simple tap vs drag.
+    // The previous mousedown code executes game logic immediately. 
+    // We should separate "Input Action" from "Camera Move".
+
+    if (e.touches.length === 1) {
+        const t = e.touches[0];
+        // We still trigger the 'mousedown' logic for UI interaction?
+        // Let's pass to mousedown handler for "start drag" logic
+        onPointerDown(t.clientX, t.clientY);
+    } else if (e.touches.length === 2) {
+        camera.isDragging = true;
+        camera.lastPinchDist = getPinchDist(e.touches[0], e.touches[1]);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // Prevent scrolling
+    if (e.touches.length === 1) {
+        const t = e.touches[0];
+        onPointerMove(t.clientX, t.clientY);
+    } else if (e.touches.length === 2) {
+        const dist = getPinchDist(e.touches[0], e.touches[1]);
+        onPointerMove(0, 0, true, dist);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    onPointerUp();
+});
+
+// Mouse Events
+canvas.addEventListener('mousedown', (e) => {
+    // We keep the original mousedown for GAME LOGIC (clicking buttons/cars)
+    // But we also want to start dragging if we didn't hit a button?
+    // Or simpler: Middle mouse / Right mouse to drag? 
+    // OR: Drag background to pan. Click object to interact.
+
+    // Let's rely on the top-level 'mousedown' listener (the big one below) for game logic
+    // We need to differentiate "Click" vs "Drag".
+    // Usually: MouseDown -> sets 'potentialClick = true'
+    // MouseMove -> sets 'potentialClick = false'
+    // MouseUp -> if potentialClick, trigger logic.
+
+    // For now, let's enable Drag on Right Click or Middle Click, or plain Left Drag if it doesn't hit UI?
+    // The user asked specifically for "desplazar ajustar la pantalla".
+    // Let's assume Left Click Drag is PAN, unless we hit a clickable object.
+
+    // Actually, the original 'mousedown' listener is HUGE and handles all logic. 
+    // We need to preserve that. 
+    // If I replace 'mousedown' completely, I must ensure logic is preserved.
+    // I will REPLACE the original 'mousedown' listener logic with a NEW one that handles Coordinate Transforms.
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    onPointerDown(mx, my);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (e.buttons === 1) { // Left click drag
+        const rect = canvas.getBoundingClientRect();
+        onPointerMove(e.clientX - rect.left, e.clientY - rect.top);
+    }
+});
+
+canvas.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('wheel', (e) => {
+    if (game.state === "MENU") {
+        game.scrollY -= e.deltaY;
+        if (game.scrollY > 0) game.scrollY = 0;
+        if (game.scrollY < -game.maxScroll) game.scrollY = -game.maxScroll;
+    } else {
+        // Zoom on scroll
+        const zoomSpeed = 0.001;
+        const newZoom = camera.zoom - e.deltaY * zoomSpeed;
+        if (newZoom > 0.4 && newZoom < 3.0) {
+            // center zoom around mouse pointer would be best, but simple zoom is fine
+            camera.zoom = newZoom;
+        }
+    }
+    e.preventDefault();
+}, { passive: false });
+
+
+// REPLACING 'mousedown' event with the new logic that supports World/Screen separation.
+// The old one is removed by NOT including it in this ReplacementChunk (it's being overwritten).
 canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    // Calculate layout offsets (centering)
     const w = canvas.width;
     const h = canvas.height;
 
+    // We only trigger game actions if we are NOT dragging considerably.
+    // But implementing drag-threshold is tricky in 'mousedown'. 
+    // Actually, we usually trigger on 'mouseup' or 'click' for actions to distiguish drag.
+    // BUT the original code used 'mousedown'. 
+    // FOR SIMPLICITY: We will allow actions on mousedown.
+    // Use Right-Click for Pan only? And Left for interacting + Pan?
+    // Let's treat standard Left Click as "Interact". 
+    // The User can Pan by dragging on "Empty Space".
+    // Detailed hit detection is needed.
+
     if (game.state === "MENU") {
         // Scroll
-        // Simple scroll handling via wheel event elsewhere, here just clicks
-
         // Exit (Top Right)
         if (mx > w - 100 && mx < w - 20 && my > 20 && my < 60) {
-            // Can't really exit a web page, maybe reload?
             location.reload();
         }
 
@@ -311,11 +494,16 @@ canvas.addEventListener('mousedown', (e) => {
 
         const sortedIds = Object.keys(game.levels).map(Number).sort((a, b) => a - b);
 
+
+
         sortedIds.forEach((lid, idx) => {
             const row = Math.floor(idx / cols);
             const col = idx % cols;
             const x = startX + col * (btnW + gapX);
             const y = startY + row * (btnH + gapY);
+
+            // Optimization: Don't check click if outside viewport
+            if (y + btnH < 250 || y > h) return;
 
             if (mx >= x && mx <= x + btnW && my >= y && my <= y + btnH) {
                 game.startLevel(lid);
@@ -323,47 +511,18 @@ canvas.addEventListener('mousedown', (e) => {
         });
 
     } else if (game.state === "PLAYING" || game.state === "WON") {
+        // --- UI CLICKS (Screen Coordinates) ---
         // Menu Button
         if (mx >= 20 && mx <= 100 && my >= 20 && my <= 50) {
             game.state = "MENU";
+            return;
         }
 
         if (game.state === "PLAYING") {
             // Restart Header
             if (mx >= 110 && mx <= 190 && my >= 20 && my <= 50) {
                 game.startLevel(game.levelNum);
-            }
-
-            const trackStartX = (w - CONFIG.TRACK_WIDTH) / 2;
-            const trackStartY = 150;
-
-            // Tracks & Cars
-            for (let i = 0; i < game.tracks.length; i++) {
-                const y = trackStartY + i * CONFIG.TRACK_SPACING;
-
-                // Loco Button
-                const btnX = trackStartX - 60;
-                if (mx >= btnX && mx <= btnX + 50 && my >= y && my <= y + 40) {
-                    game.positionLocomotive(i);
-                }
-
-                // Move Here Button
-                if (game.locoTrack !== -1 && game.selectedCars.size > 0 && i !== game.locoTrack) {
-                    const moveX = trackStartX - 180;
-                    if (mx >= moveX && mx <= moveX + 110 && my >= y && my <= y + 40) {
-                        game.moveSelected(i);
-                    }
-                }
-
-                // Cars
-                const track = game.tracks[i];
-                for (let j = 0; j < track.length; j++) {
-                    if (track[j] === '') continue;
-                    const cx = trackStartX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
-                    if (mx >= cx && mx <= cx + CONFIG.CAR_WIDTH && my >= y && my <= y + CONFIG.CAR_HEIGHT) {
-                        game.selectCar(i, j);
-                    }
-                }
+                return;
             }
 
             // Bottom Restart
@@ -371,6 +530,7 @@ canvas.addEventListener('mousedown', (e) => {
             const resetY = h - 80;
             if (mx >= resetX && mx <= resetX + 90 && my >= resetY && my <= resetY + 40) {
                 game.startLevel(game.levelNum);
+                return;
             }
         }
 
@@ -381,6 +541,7 @@ canvas.addEventListener('mousedown', (e) => {
                 const nextY = h - 80;
                 if (mx >= nextX && mx <= nextX + 90 && my >= nextY && my <= nextY + 40) {
                     game.startLevel(game.levelNum + 1);
+                    return;
                 }
             }
 
@@ -389,6 +550,7 @@ canvas.addEventListener('mousedown', (e) => {
             const replayY = h - 80;
             if (mx >= replayX && mx <= replayX + 90 && my >= replayY && my <= replayY + 40) {
                 game.startLevel(game.levelNum);
+                return;
             }
 
             // Menu Overlay
@@ -396,6 +558,56 @@ canvas.addEventListener('mousedown', (e) => {
             const menuY = h - 140;
             if (mx >= menuX && mx <= menuX + 90 && my >= menuY && my <= menuY + 40) {
                 game.state = "MENU";
+                return;
+            }
+            // If we are WON, we don't process world clicks
+            return;
+        }
+
+        // --- WORLD CLICKS (Transformed Coordinates) ---
+        // Convert screen (mx, my) to world (wx, wy)
+        const wx = (mx - camera.x) / camera.zoom;
+        const wy = (my - camera.y) / camera.zoom;
+
+        const trackStartX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2; // Original logic based
+        // Actually, we should keep trackStartX relative to the world origin.
+        // In the original code: trackStartX = (w - CONFIG.TRACK_WIDTH) / 2;
+        // BUT now 'w' varies. For the world, let's assume a fixed "Virtual Width" or just center it around 0 or keep usage of DEFAULT_WIDTH.
+        // Let's stick to a fixed world layout.
+        // We will define the "World Center" as roughly (1024/2, 768/2) or just use the same coordinates as before but effectively they are now "World Coordinates".
+        // To keep it simple, let's assume the World Coordinate System matches the Default Desktop Resolution (1024x768).
+        // So trackStartX is fixed based on 1024.
+
+        const worldW = CONFIG.DEFAULT_WIDTH;
+        const worldTrackStartX = (worldW - CONFIG.TRACK_WIDTH) / 2;
+        const worldTrackStartY = 150;
+
+        // Tracks & Cars
+        for (let i = 0; i < game.tracks.length; i++) {
+            const y = worldTrackStartY + i * CONFIG.TRACK_SPACING;
+
+            // Loco Button
+            const btnX = worldTrackStartX - 60;
+            if (wx >= btnX && wx <= btnX + 50 && wy >= y && wy <= y + 40) {
+                game.positionLocomotive(i);
+            }
+
+            // Move Here Button
+            if (game.locoTrack !== -1 && game.selectedCars.size > 0 && i !== game.locoTrack) {
+                const moveX = worldTrackStartX - 180;
+                if (wx >= moveX && wx <= moveX + 110 && wy >= y && wy <= y + 40) {
+                    game.moveSelected(i);
+                }
+            }
+
+            // Cars
+            const track = game.tracks[i];
+            for (let j = 0; j < track.length; j++) {
+                if (track[j] === '') continue;
+                const cx = worldTrackStartX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
+                if (wx >= cx && wx <= cx + CONFIG.CAR_WIDTH && wy >= y && wy <= y + CONFIG.CAR_HEIGHT) {
+                    game.selectCar(i, j);
+                }
             }
         }
     }
@@ -414,7 +626,12 @@ function drawRect(x, y, w, h, color, radius = 0, border = null) {
     ctx.fillStyle = color;
     if (radius > 0) {
         ctx.beginPath();
-        ctx.roundRect(x, y, w, h, radius);
+        // Check browser support for roundRect - polyfill or fallback
+        if (ctx.roundRect) {
+            ctx.roundRect(x, y, w, h, radius);
+        } else {
+            ctx.rect(x, y, w, h); // Fallback
+        }
         ctx.fill();
         if (border) {
             ctx.strokeStyle = border.color;
@@ -677,6 +894,7 @@ function loop() {
         ctx.restore(); // End Clipping
 
     } else if (game.state === "PLAYING" || game.state === "WON") {
+        // --- HUD / UI (Fixed Screen Coords) ---
         drawButton(20, 20, 80, 30, "Menú", "#969696");
         if (game.state === "PLAYING") {
             drawButton(110, 20, 80, 30, "Reiniciar", "#646464");
@@ -692,7 +910,13 @@ function loop() {
             drawText(game.message, 650, 42, 20, "#FF0000");
         }
 
-        const trackStartX = (w - CONFIG.TRACK_WIDTH) / 2;
+        // --- WORLD RENDER (Transformed) ---
+        ctx.save();
+        ctx.translate(camera.x, camera.y);
+        ctx.scale(camera.zoom, camera.zoom);
+
+        const worldW = CONFIG.DEFAULT_WIDTH;
+        const trackStartX = (worldW - CONFIG.TRACK_WIDTH) / 2;
         const trackStartY = 150;
 
         for (let i = 0; i < game.tracks.length; i++) {
@@ -708,20 +932,14 @@ function loop() {
             // Loco Button
             const btnX = trackStartX - 60;
             const isLocoHere = (game.locoTrack === i);
-
-            // Smaller Size: 50x30
             const iconW = 50;
             const iconH = 30;
-            // Center vertically relative to track (y is top of row, height is 40)
-            // We want center of icon (15) to match center of row (20). So top is y + 5.
             const iconY = y + (CONFIG.CAR_HEIGHT - iconH) / 2;
 
             if (isLocoHere) {
                 drawTrainIcon(btnX, iconY, CONFIG.COLORS.LOCO_BTN, 0.8);
             } else {
-                // Gray button with Arrow
                 drawRect(btnX, iconY, iconW, iconH, CONFIG.COLORS.LOCO_BTN_OFF, 4);
-                // Arrow
                 ctx.fillStyle = "#646464";
                 ctx.beginPath();
                 const cx = btnX + iconW / 2;
@@ -746,7 +964,9 @@ function loop() {
                 drawCar(cx, y, track[j], isSelected);
             }
         }
+        ctx.restore();
 
+        // --- OVERLAY UI (Fixed) ---
         if (game.state === "PLAYING") {
             drawButton(w / 2 - 100, h - 80, 90, 40, "Reiniciar", "#646464");
         }
