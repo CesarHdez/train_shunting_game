@@ -312,6 +312,7 @@ function resize() {
     camera.y = 50 * camera.zoom; // Slight top padding
 }
 window.addEventListener('resize', resize);
+// Force initial resize to ensure canvas.width is correct before game loop or menu logic runs.
 resize();
 
 // Input Handling
@@ -483,18 +484,11 @@ canvas.addEventListener('mousedown', (e) => {
             location.reload();
         }
 
-        const cols = 5;
-        const btnW = 140;
-        const btnH = 80;
-        const gapX = 20;
-        const gapY = 20;
-        const gridW = cols * btnW + (cols - 1) * gapX;
-        const startX = (w - gridW) / 2;
-        const startY = 250 + game.scrollY;
+        const layout = getMenuLayout(w, h);
+        const { cols, btnW, btnH, gapX, gapY, startX, startY: baseStartY } = layout;
+        const startY = baseStartY + game.scrollY;
 
         const sortedIds = Object.keys(game.levels).map(Number).sort((a, b) => a - b);
-
-
 
         sortedIds.forEach((lid, idx) => {
             const row = Math.floor(idx / cols);
@@ -622,6 +616,37 @@ window.addEventListener('wheel', (e) => {
 });
 
 // Drawing Helpers
+function getMenuLayout(w, h) {
+    // console.log("Menu Width:", w);
+    let cols = 5;
+    let btnW = 140;
+    const btnH = 80;
+    const gapX = 20;
+    const gapY = 20;
+
+    // Responsive logic
+    // Adjusted breakpoints for better mobile detection (iPhone Max is ~428px, usually < 500 works but let's be safe)
+    // If we're seeing 3 cols on mobile, width > 500. Let's bump it.
+    if (w < 600) {
+        cols = 2;
+        const availableW = w - 40;
+        btnW = (availableW - (cols - 1) * gapX) / cols;
+    } else if (w < 900) {
+        cols = 3;
+    } else if (w < 1200) {
+        cols = 4;
+    }
+
+    // Clamp btnW? No, let it be flexible or fixed.
+    // Recalculate gridW
+    const gridW = cols * btnW + (cols - 1) * gapX;
+    const startX = (w - gridW) / 2;
+    // We MUST use the same startY base for consistency
+    const startY = 250;
+
+    return { cols, btnW, btnH, gapX, gapY, startX, startY };
+}
+
 function drawRect(x, y, w, h, color, radius = 0, border = null) {
     ctx.fillStyle = color;
     if (radius > 0) {
@@ -833,14 +858,9 @@ function loop() {
         drawButton(w - 100, 20, 80, 40, "Salir", "#C83232");
 
         // --- Grid (Scrollable with Clipping) ---
-        const cols = 5;
-        const btnW = 140;
-        const btnH = 80;
-        const gapX = 20;
-        const gapY = 20;
-        const gridW = cols * btnW + (cols - 1) * gapX;
-        const startX = (w - gridW) / 2;
-        const startY = 250 + game.scrollY;
+        const layout = getMenuLayout(w, h);
+        const { cols, btnW, btnH, gapX, gapY, startX, startY: baseStartY } = layout;
+        const startY = baseStartY + game.scrollY;
 
         const sortedIds = Object.keys(game.levels).map(Number).sort((a, b) => a - b);
 
