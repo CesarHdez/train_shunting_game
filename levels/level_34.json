@@ -1,0 +1,13 @@
+{
+  "id": 34,
+  "tracks": [
+    ["H", "E", "B", "", "", "", "", ""],
+    ["G", "D", "A", "", "", "", "", ""],
+    ["F", "C", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "description": "Nivel 34: Distribución cruzada. Cada vagón está en la vía equivocada.",
+  "capacity": 8
+}

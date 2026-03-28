@@ -1,0 +1,13 @@
+{
+  "id": 40,
+  "tracks": [
+    ["G", "Y", "D", "A", "", "", "", "", ""],
+    ["H", "X", "E", "B", "", "", "", "", ""],
+    ["F", "C", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "description": "Nivel 40: Caos total. X e Y separan pares de vagones en vías paralelas.",
+  "capacity": 9
+}

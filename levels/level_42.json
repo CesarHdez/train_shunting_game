@@ -1,0 +1,13 @@
+{
+  "id": 42,
+  "tracks": [
+    ["H", "F", "X", "B", "", "", "", "", "", ""],
+    ["G", "D", "A", "", "", "", "", "", "", ""],
+    ["Y", "E", "C", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "description": "Nivel 42: Comodines en posiciones medias. Reorganiza antes de ensamblar.",
+  "capacity": 10
+}

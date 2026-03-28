@@ -32,3 +32,6 @@ venv/
 
 # Agentic
 .gemini/
+
+# Game dev artifacts
+scores.json

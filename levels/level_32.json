@@ -1,0 +1,13 @@
+{
+  "id": 32,
+  "tracks": [
+    ["E", "C", "A", "", "", "", "", ""],
+    ["G", "B", "F", "", "", "", "", ""],
+    ["H", "D", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "description": "Nivel 32: Entierro profundo. A está en el índice 2, rodeada de obstáculos.",
+  "capacity": 8
+}

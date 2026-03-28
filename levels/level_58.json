@@ -1,0 +1,15 @@
+{
+  "id": 58,
+  "tracks": [
+    ["F", "C", "A", "", "", "", "", "", "", ""],
+    ["J", "G", "D", "B", "", "", "", "", "", ""],
+    ["I", "H", "E", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+  "description": "Nivel 58: 10 vagones, locomotora derecha. Sin comodines pero la complejidad exige coordinación.",
+  "capacity": 10,
+  "rightLoco": true
+}

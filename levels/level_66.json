@@ -1,0 +1,16 @@
+{
+  "id": 66,
+  "tracks": [
+    ["H", "E", "B", "", "", "", "", "", "", "", ""],
+    ["J", "G", "D", "A", "", "", "", "", "", "", ""],
+    ["X", "I", "F", "C", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+  "description": "Nivel 66: locoLimit 3, A enterrada en índice 3. X cubre I y F. Muy restrictivo.",
+  "capacity": 11,
+  "rightLoco": true,
+  "locoLimit": 3
+}

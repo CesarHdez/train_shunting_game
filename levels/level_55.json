@@ -1,0 +1,15 @@
+{
+  "id": 55,
+  "tracks": [
+    ["E", "C", "A", "", "", "", "", "", "", ""],
+    ["I", "G", "D", "B", "", "", "", "", "", ""],
+    ["X", "H", "F", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", ""]
+  ],
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+  "description": "Nivel 55: 9 vagones objetivo con comodín X. Usa la locomotora derecha para agilizar.",
+  "capacity": 10,
+  "rightLoco": true
+}
