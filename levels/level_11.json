@@ -1,46 +1,12 @@
 {
   "id": 11,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "D",
-      "X",
-      "E",
-      "",
-      ""
-    ],
-    [
-      "B",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["", "", "", "", "", ""],
+    ["D", "A", "", "", "", ""],
+    ["B", "E", "", "", "", ""],
+    ["C", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D",
-    "E"
-  ],
-  "description": "Nivel 11: Medio. Cuidado con el espacio.",
+  "targetSequence": ["A", "B", "C", "D", "E"],
+  "description": "Nivel 11: Medio. Cinco vagones dispersos.",
   "capacity": 6
 }

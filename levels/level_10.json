@@ -1,52 +1,12 @@
 {
   "id": 10,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "B",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["E", "B", "", "", "", ""],
+    ["", "", "", "", "", ""],
+    ["C", "F", "A", "", "", ""],
+    ["D", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C"
-  ],
-  "description": "Nivel 10: F\u00e1cil. Ordena los vagones.",
-  "capacity": 8
+  "targetSequence": ["A", "B", "C", "D", "E", "F"],
+  "description": "Nivel 10: Medio-Fácil. Cuatro vías, seis vagones.",
+  "capacity": 6
 }

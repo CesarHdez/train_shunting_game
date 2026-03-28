@@ -1,61 +1,13 @@
 {
   "id": 29,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "D",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "G",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "Y",
-      "X",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "Z",
-      "E",
-      "A",
-      "F",
-      "B",
-      "",
-      ""
-    ]
+    ["D", "F", "H", "B", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""],
+    ["E", "G", "A", "C", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G"
-  ],
-  "description": "Nivel 29: Dif\u00edcil. Espacio muy limitado.",
-  "capacity": 7
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "description": "Nivel 29: Experto. Dos grupos completamente invertidos.",
+  "capacity": 8
 }

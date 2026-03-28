@@ -1,75 +1,164 @@
-body {
+* {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    background-color: #2c3e50;
+}
+
+body {
+    background: #0a0e1a;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     overflow: hidden;
-    font-family: Arial, sans-serif;
+    font-family: 'Rajdhani', Arial, sans-serif;
 }
 
 #game-container {
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-#login-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(44, 62, 80, 0.95);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.login-box {
-    background: #f0f8ff;
-    padding: 40px;
-    border-radius: 10px;
-    text-align: center;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-}
-
-.login-box h2 {
-    margin-top: 0;
-    color: #2c3e50;
-}
-
-.login-box input {
-    padding: 10px;
-    font-size: 18px;
-    border: 2px solid #bdc3c7;
-    border-radius: 5px;
-    margin: 20px 0;
-    width: 200px;
-    text-align: center;
-}
-
-.login-box button {
-    background: #27ae60;
-    color: white;
-    border: none;
-    padding: 10px 30px;
-    font-size: 18px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.login-box button:hover {
-    background: #2ecc71;
+    width: 100vw;
+    height: 100vh;
 }
 
 canvas {
     display: block;
-    background-color: #f0f8ff;
-    touch-action: none;
-    /* Important for custom gestures */
     width: 100%;
     height: 100%;
+    touch-action: none;
 }
+
+/* ─── Login Overlay ───────────────────────────────────── */
+
+#login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 8, 20, 0.94);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.login-box {
+    background: linear-gradient(160deg, #141a2e 0%, #0d1117 100%);
+    border: 1px solid rgba(255, 215, 0, 0.25);
+    padding: 48px 56px;
+    border-radius: 16px;
+    text-align: center;
+    box-shadow:
+        0 0 60px rgba(255, 215, 0, 0.08),
+        0 20px 60px rgba(0, 0, 0, 0.7);
+    max-width: 380px;
+    width: 90%;
+    animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.login-logo {
+    font-size: 56px;
+    margin-bottom: 12px;
+    display: block;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.4));
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50%       { transform: scale(1.06); }
+}
+
+.login-box h2 {
+    color: #ffd700;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    margin-bottom: 6px;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.login-box p {
+    color: #7986cb;
+    font-size: 14px;
+    letter-spacing: 1px;
+    margin-bottom: 28px;
+}
+
+.login-box input {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Rajdhani', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #e8eaf6;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-bottom: 16px;
+}
+
+.login-box input:focus {
+    border-color: rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
+}
+
+.login-box input::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.login-box input.shake {
+    animation: shake 0.4s ease;
+    border-color: #ff5252;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-8px); }
+    40%       { transform: translateX(8px); }
+    60%       { transform: translateX(-5px); }
+    80%       { transform: translateX(5px); }
+}
+
+.login-box button {
+    width: 100%;
+    padding: 12px;
+    font-family: 'Rajdhani', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, #1b5e20, #2e7d32);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 4px 20px rgba(46, 125, 50, 0.4);
+}
+
+.login-box button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(46, 125, 50, 0.6);
+}
+
+.login-box button:active {
+    transform: translateY(0);
+}
+
+/* ─── Scrollbar ────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0e1a; }
+::-webkit-scrollbar-thumb { background: #37474f; border-radius: 3px; }

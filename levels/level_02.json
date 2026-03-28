@@ -1,52 +1,11 @@
 {
   "id": 2,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "B",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["", "", "", "", "", ""],
+    ["", "", "", "", "", ""],
+    ["C", "B", "A", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C"
-  ],
-  "description": "Nivel 2: F\u00e1cil. Ordena los vagones.",
-  "capacity": 8
+  "targetSequence": ["A", "B", "C"],
+  "description": "Nivel 2: Tutorial. Invierte el orden de los vagones.",
+  "capacity": 6
 }

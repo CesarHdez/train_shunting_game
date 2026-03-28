@@ -1,42 +1,11 @@
 {
   "id": 8,
   "tracks": [
-    [
-      "C",
-      "A",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "B",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["E", "C", "", "", "", ""],
+    ["", "", "", "", "", ""],
+    ["D", "A", "B", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C"
-  ],
-  "description": "Nivel 8: F\u00e1cil. Ordena los vagones.",
-  "capacity": 8
+  "targetSequence": ["A", "B", "C", "D", "E"],
+  "description": "Nivel 8: Fácil. Espacio justo para maniobrar.",
+  "capacity": 6
 }

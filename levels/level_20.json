@@ -1,46 +1,13 @@
 {
   "id": 20,
   "tracks": [
-    [
-      "A",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "X",
-      "Y",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "D",
-      "C",
-      "E",
-      "B",
-      "",
-      ""
-    ]
+    ["C", "G", "", "", "", "", ""],
+    ["A", "", "", "", "", "", ""],
+    ["F", "D", "", "", "", "", ""],
+    ["E", "B", "", "", "", "", ""],
+    ["", "", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D",
-    "E"
-  ],
-  "description": "Nivel 20: Medio. Cuidado con el espacio.",
-  "capacity": 6
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G"],
+  "description": "Nivel 20: Difícil. Siete vagones en cinco vías.",
+  "capacity": 7
 }

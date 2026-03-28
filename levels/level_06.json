@@ -1,42 +1,11 @@
 {
   "id": 6,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "B",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["", "", "", "", "", ""],
+    ["D", "B", "", "", "", ""],
+    ["C", "E", "A", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C"
-  ],
-  "description": "Nivel 6: F\u00e1cil. Ordena los vagones.",
-  "capacity": 8
+  "targetSequence": ["A", "B", "C", "D", "E"],
+  "description": "Nivel 6: Fácil. Cinco vagones en dos vías.",
+  "capacity": 6
 }

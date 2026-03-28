@@ -1,54 +1,12 @@
 {
   "id": 15,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "B",
-      "Y",
-      "A",
-      "X",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "E",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "D",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["F", "C", "", "", "", ""],
+    ["B", "", "", "", "", ""],
+    ["D", "A", "E", "", "", ""],
+    ["", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D",
-    "E"
-  ],
-  "description": "Nivel 15: Medio. Cuidado con el espacio.",
+  "targetSequence": ["A", "B", "C", "D", "E", "F"],
+  "description": "Nivel 15: Medio. Planifica bien tus movimientos.",
   "capacity": 6
 }

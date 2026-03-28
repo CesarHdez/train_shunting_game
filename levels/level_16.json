@@ -1,45 +1,13 @@
 {
   "id": 16,
   "tracks": [
-    [
-      "D",
-      "B",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "X",
-      "C",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["F", "B", "", "", "", ""],
+    ["", "", "", "", "", ""],
+    ["C", "E", "A", "", "", ""],
+    ["D", "", "", "", "", ""],
+    ["", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D"
-  ],
-  "description": "Nivel 16: Medio. Cuidado con el espacio.",
+  "targetSequence": ["A", "B", "C", "D", "E", "F"],
+  "description": "Nivel 16: Medio-Difícil. Cinco vías disponibles.",
   "capacity": 6
 }

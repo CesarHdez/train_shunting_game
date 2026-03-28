@@ -1,42 +1,11 @@
 {
   "id": 1,
   "tracks": [
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "B",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "A",
-      "C",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["", "", "", "", "", ""],
+    ["B", "", "", "", "", ""],
+    ["A", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C"
-  ],
-  "description": "Nivel 1: F\u00e1cil. Ordena los vagones.",
-  "capacity": 8
+  "targetSequence": ["A", "B"],
+  "description": "Nivel 1: Tutorial. Coloca A antes que B.",
+  "capacity": 6
 }

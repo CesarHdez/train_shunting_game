@@ -1,53 +1,12 @@
 {
   "id": 19,
   "tracks": [
-    [
-      "Y",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "X",
-      "A",
-      "B",
-      "",
-      "",
-      ""
-    ],
-    [
-      "D",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ],
-    [
-      "C",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ]
+    ["G", "D", "", "", "", "", ""],
+    ["B", "F", "", "", "", "", ""],
+    ["E", "A", "C", "", "", "", ""],
+    ["", "", "", "", "", "", ""]
   ],
-  "targetSequence": [
-    "A",
-    "B",
-    "C",
-    "D"
-  ],
-  "description": "Nivel 19: Medio. Cuidado con el espacio.",
-  "capacity": 6
+  "targetSequence": ["A", "B", "C", "D", "E", "F", "G"],
+  "description": "Nivel 19: Difícil. Siete vagones muy mezclados.",
+  "capacity": 7
 }

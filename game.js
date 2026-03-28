@@ -1,154 +1,377 @@
-// Game Configuration
+// ================================================================
+//  PATIO DE TRENES — v3.0
+//  + Deshacer (undo)
+//  + Peines visuales + animación de movimiento
+//  + Posicionar locomotora no cuesta maniobra (excepto vacía)
+// ================================================================
+
+// ─────────────────────────── CONFIG ────────────────────────────
+
 const CONFIG = {
-    DEFAULT_WIDTH: 1024,
+    DEFAULT_WIDTH:  1024,
     DEFAULT_HEIGHT: 768,
-    TRACK_START_X: 150,
-    TRACK_START_Y: 150,
-    TRACK_SPACING: 80,
-    CAR_WIDTH: 60,
-    CAR_HEIGHT: 40,
-    CAR_SPACING: 5,
-    TRACK_WIDTH: 600,
-    COLORS: {
-        BG: "#F0F8FF",
-        TRACK: "#646464",
-        RAIL: "#A0A0A0",
-        SLEEPER: "#8B4513",
-        CAR: "#FF8C00",
-        CAR_BORDER: "#643200",
-        SELECTED: "#6495ED",
-        LOCO_BTN: "#DC143C",
-        LOCO_BTN_OFF: "#C8C8C8",
-        TEXT: "#323232",
-        BTN_TEXT: "#FFFFFF",
-        MENU_BG: "#E6E6FA",
-        RECORD: "#FFD700",
-        CAPACITY_FULL: "#FF0000"
-    }
+    TRACK_WIDTH:    600,
+    TRACK_SPACING:  80,
+    CAR_WIDTH:      60,
+    CAR_HEIGHT:     40,
+    CAR_SPACING:    5,
+    HUD_HEIGHT:     100,
+    PEINE_X:        30,   // World X of left peine main line
+    // Future: PEINE_RIGHT_X = trackSX + TRACK_WIDTH + 100
 };
+
+const C = {
+    BG_TOP:        '#0d1117',  BG_BOT:     '#1a1f2e',
+    GRID:          'rgba(255,255,255,0.025)',
+    BALLAST:       '#252535',  SLEEPER_A:  '#5d3f2a',  SLEEPER_B: '#4a3322',
+    RAIL_HI:       '#c8d0da',  RAIL_LO:    '#606870',
+    CAR_GLOW:      '#4fc3f7',
+    LOCO_RED:      '#c62828',  LOCO_RED2:  '#ef5350',
+    LOCO_GREY:     '#37474f',  LOCO_GREY2: '#546e7a',
+    TEXT:          '#e8eaf6',  TEXT_DIM:   '#7986cb',  TEXT_WARN: '#ff5252',
+    GOLD:          '#ffd700',  SILVER:     '#b0bec5',  BRONZE:    '#a1887f',
+    SUCCESS:       '#69f0ae',  RECORD:     '#ffd700',
+    STAR_ON:       '#ffd700',  STAR_OFF:   '#37474f',
+    HEADER_BG:     'rgba(8,12,24,0.94)',  TARGET_BG: 'rgba(5,8,18,0.88)',
+    MENU_BG:       '#080c16',  CARD:       '#111827',
+    WIN_OVERLAY:   'rgba(4,6,16,0.93)',
+    MOVE_BTN:      '#1b5e20',  MOVE_BTN2:  '#2e7d32',
+    CAPACITY_OK:   '#546e7a',  CAPACITY_FULL: '#c62828',
+    PEINE_SPINE:   '#8090a0',  PEINE_NODE: '#c8d0da',
+    UNDO_BTN:      '#4a148c',
+};
+
+const CAR_TYPES = [
+    { name: 'Boxcar',    lo: '#7B3F10', hi: '#A05A20', ac: '#5a2d0a' },
+    { name: 'Hopper',    lo: '#37474f', hi: '#546e7a', ac: '#263238' },
+    { name: 'Gondola',   lo: '#1b5e20', hi: '#388e3c', ac: '#0a3d0f' },
+    { name: 'Tanker',    lo: '#1a1a1a', hi: '#323232', ac: '#616161' },
+    { name: 'Container', lo: '#0d47a1', hi: '#1976d2', ac: '#42a5f5' },
+];
+
+// ─────────────────────── ANIMATION HELPERS ─────────────────────
+
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+function easeOut(t) { return 1 - (1-t)*(1-t); }
+
+// Cubic bezier helpers for curved peine branches
+function cbez(t,p0,p1,p2,p3){ const m=1-t; return m*m*m*p0+3*m*m*t*p1+3*m*t*t*p2+t*t*t*p3; }
+function cbezD(t,p0,p1,p2,p3){ const m=1-t; return 3*(m*m*(p1-p0)+2*m*t*(p2-p1)+t*t*(p3-p2)); }
+
+// Build waypoint path through the LEFT peine from (startX,srcY) to (endX,dstY).
+// convX = fan convergence (trunk) X. fanEndX = fan right edge X.
+// 'side' parameter reserved for future right-peine support.
+function buildWaypoints(startX, srcY, endX, dstY, side = 'LEFT') {
+    const convX   = CONFIG.PEINE_X + 30;  // 60 — convergence/trunk X
+    const fanEndX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2 - 70; // 142
+    const dir = dstY > srcY ? 1 : -1;
+    return [
+        { x: startX,  y: srcY,         t: 0.00 },
+        { x: fanEndX, y: srcY,         t: 0.20 },
+        { x: convX,   y: srcY+dir*4,   t: 0.38 },
+        { x: convX,   y: dstY-dir*4,   t: 0.62 },
+        { x: fanEndX, y: dstY,         t: 0.80 },
+        { x: endX,    y: dstY,         t: 1.00 },
+    ];
+}
+
+// ──────────────────────── PARTICLE SYSTEM ──────────────────────
+
+class ParticleSystem {
+    constructor() { this.p = []; }
+    spawnConfetti(cx, cy, count = 160) {
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.random()-0.5)*Math.PI*2, speed = Math.random()*14+3;
+            this.p.push({ x: cx+(Math.random()-0.5)*300, y: cy+(Math.random()-0.5)*100,
+                vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-7,
+                w: Math.random()*9+4, h: Math.random()*5+3,
+                color: `hsl(${Math.floor(Math.random()*360)},90%,65%)`,
+                rot: Math.random()*Math.PI*2, rotV: (Math.random()-0.5)*0.25,
+                life: 1, decay: Math.random()*0.008+0.004 });
+        }
+    }
+    update() {
+        for (let i=this.p.length-1; i>=0; i--) {
+            const p=this.p[i]; p.x+=p.vx; p.y+=p.vy;
+            p.vy+=0.32; p.vx*=0.99; p.rot+=p.rotV; p.life-=p.decay;
+            if (p.life<=0) this.p.splice(i,1);
+        }
+    }
+    draw(ctx) {
+        for (const p of this.p) {
+            ctx.save(); ctx.globalAlpha=Math.min(p.life*2,1);
+            ctx.fillStyle=p.color; ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+            ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore();
+        }
+        ctx.globalAlpha=1;
+    }
+}
+const particles = new ParticleSystem();
+
+// ──────────────────────── ANIMATION MANAGER ────────────────────
+
+class AnimationManager {
+    constructor() {
+        this.isActive      = false;
+        this.progress      = 0;
+        this.duration      = 0.65;
+        this.cars          = [];        // {label, waypoints[]}
+        this.locoWaypoints = null;
+        this.srcLocoTrack  = -1;
+        this.dstTrackIdx   = -1;
+        this.numMovingCars = 0;
+        this.callback      = null;
+    }
+
+    start(cars, locoWaypoints, srcLocoTrack, dstTrackIdx, numMoving, distFactor, cb) {
+        this.cars          = cars;
+        this.locoWaypoints = locoWaypoints;
+        this.srcLocoTrack  = srcLocoTrack;
+        this.dstTrackIdx   = dstTrackIdx;
+        this.numMovingCars = numMoving;
+        this.duration      = 0.38 + 0.45 * distFactor; // faster for nearby tracks
+        this.progress      = 0;
+        this.isActive      = true;
+        this.callback      = cb;
+    }
+
+    update(dt) {
+        if (!this.isActive) return;
+        const stagger    = 0.10;
+        const totalNeeded = 1 + stagger * this.numMovingCars; // loco + N cars staggered
+        this.progress += dt / this.duration;
+        if (this.progress >= totalNeeded) {
+            this.progress = totalNeeded;
+            this.isActive = false;
+            this.callback?.();
+        }
+    }
+
+    // Interpolate waypoints at a specific t value (0–1).
+    getPosAt(waypoints, t) {
+        for (let i = 0; i < waypoints.length-1; i++) {
+            const a = waypoints[i], b = waypoints[i+1];
+            if (t <= b.t) {
+                const lt = (t - a.t) / (b.t - a.t);
+                const e  = easeInOut(lt);
+                return { x: a.x+(b.x-a.x)*e, y: a.y+(b.y-a.y)*e };
+            }
+        }
+        const last = waypoints[waypoints.length-1];
+        return { x: last.x, y: last.y };
+    }
+
+    getPos(waypoints) { return this.getPosAt(waypoints, Math.min(1, this.progress)); }
+
+    // Destination state is deferred to animation end — nothing to pre-hide.
+    isHidden(trackIdx, carJ) { return false; }
+
+    // Should the loco button be hidden at trackIdx?
+    isLocoHidden(trackIdx) {
+        return this.isActive &&
+               (trackIdx === this.srcLocoTrack || trackIdx === this.dstTrackIdx);
+    }
+
+    draw(ctx) {
+        if (!this.isActive) return;
+        const stagger = 0.10;
+
+        // Loco leads — no stagger offset
+        if (this.locoWaypoints) {
+            const locoT = Math.min(1, this.progress);
+            const lp = this.getPosAt(this.locoWaypoints, locoT);
+            drawLocoButton(lp.x, lp.y, 52, CONFIG.CAR_HEIGHT-4, true);
+        }
+
+        // Cars follow with stagger: car[0] (closest to peine) enters first
+        for (let i = 0; i < this.cars.length; i++) {
+            const car  = this.cars[i];
+            const carT = Math.min(1, Math.max(0, this.progress - (i + 1) * stagger));
+            const pos  = this.getPosAt(car.waypoints, carT);
+            drawCar(pos.x, pos.y, car.label, false);
+        }
+    }
+}
+const anim = new AnimationManager();
+
+// ──────────────────────── SCORE MANAGER ────────────────────────
+
+class ScoreManager {
+    constructor() { this.data = {}; this.load(); }
+    load() {
+        const v2 = localStorage.getItem('train_scores_v2');
+        if (v2) { this.data = JSON.parse(v2); return; }
+        const v1 = localStorage.getItem('train_shunting_scores');
+        if (v1) {
+            const old = JSON.parse(v1);
+            for (const [lid, s] of Object.entries(old)) {
+                this.data[lid] = [{ moves:s.moves, time:s.time, name:s.name||'Anon',
+                    date: new Date().toLocaleDateString('es') }];
+            }
+            this.save();
+        }
+    }
+    save() { localStorage.setItem('train_scores_v2', JSON.stringify(this.data)); }
+    addScore(levelId, moves, time, name) {
+        const lid = String(levelId);
+        if (!this.data[lid]) this.data[lid] = [];
+        const entry = { moves, time, name, date: new Date().toLocaleDateString('es') };
+        this.data[lid].push(entry);
+        this.data[lid].sort((a,b) => a.moves-b.moves || a.time-b.time);
+        this.data[lid] = this.data[lid].slice(0,5);
+        this.save();
+        return this.data[lid].findIndex(e => e.moves===moves && e.time===time && e.name===name)+1;
+    }
+    getBest(levelId)       { return this.data[String(levelId)]?.[0] || null; }
+    getLeaderboard(levelId){ return this.data[String(levelId)] || []; }
+    isCompleted(levelId)   { return (this.data[String(levelId)]?.length||0) > 0; }
+    getStars(levelId, carCount) {
+        const best = this.getBest(levelId); if (!best) return 0;
+        const n = Math.max(carCount,2);
+        if (best.moves <= n+1)     return 3;
+        if (best.moves <= n*2+1)   return 2;
+        return 1;
+    }
+    completedCount() { return Object.keys(this.data).length; }
+}
+
+// ──────────────────────── GAME STATE ───────────────────────────
 
 class GameState {
     constructor() {
-        this.state = "MENU"; // MENU, PLAYING, WON
-        this.levels = {};
-        this.scores = {};
-        this.levelNum = 1;
-        this.tracks = [];
-        this.target = [];
-        this.description = "";
-        this.capacity = 8;
+        this.state       = 'MENU';
+        this.levels      = {};
+        this.scores      = new ScoreManager();
+        this.levelNum    = 1;
+        this.tracks      = [];
+        this.target      = [];
+        this.description = '';
+        this.capacity    = 8;
+        this.playerName  = '';
 
-        this.playerName = ""; // Player Name
+        this.locoTrack    = -1;
+        this.selectedCars = new Set();
 
-        this.locoTrack = -1;
-        this.selectedCars = new Set(); // Stores strings "trackIdx,carIdx"
-
-        this.moves = 0;
-        this.startTime = 0;
+        this.moves       = 0;
+        this.startTime   = 0;
         this.elapsedTime = 0;
-        this.won = false;
-        this.newRecord = false;
-        this.message = "";
+        this.won         = false;
+        this.newRecord   = false;
+        this.lastRank    = 0;
+        this.message     = '';
         this.messageTimer = 0;
 
-        this.scrollY = 0;
-        this.maxScroll = 0;
+        this.history     = [];  // Undo stack
 
-        this.loadScores();
+        this.scrollY     = 0;   this.scrollVel  = 0;  this.maxScroll   = 0;
+        this.lbScrollY   = 0;   this.lbScrollVel = 0; this.lbMaxScroll = 0;
+        this.winSpawned  = false;
+
         this.loadLevels();
+        this.setupLogin();
+    }
 
-        // Login Logic
+    setupLogin() {
         const overlay = document.getElementById('login-overlay');
-        const input = document.getElementById('player-name');
-        const btn = document.getElementById('start-btn');
-
-        btn.addEventListener('click', () => {
+        const input   = document.getElementById('player-name');
+        const btn     = document.getElementById('start-btn');
+        const tryStart = () => {
             const name = input.value.trim();
             if (name) {
                 this.playerName = name;
-                overlay.style.display = 'none';
+                overlay.style.transition = 'opacity 0.35s';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.style.display='none', 350);
             } else {
-                alert("Por favor ingresa un nombre.");
+                input.classList.remove('shake');
+                void input.offsetWidth;
+                input.classList.add('shake');
             }
-        });
+        };
+        btn.addEventListener('click', tryStart);
+        input.addEventListener('keypress', e => { if (e.key==='Enter') tryStart(); });
     }
 
     async loadLevels() {
-        // Since we can't list directories easily without a manifest, 
-        // we'll try to load levels 1 to 30 sequentially.
-        for (let i = 1; i <= 30; i++) {
+        for (let i=1; i<=30; i++) {
             try {
-                const num = i.toString().padStart(2, '0');
-                // Add timestamp to force cache bypass
-                const response = await fetch(`levels/level_${num}.json?v=${Date.now()}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    this.levels[data.id] = data;
-                }
-            } catch (e) {
-                console.warn(`Could not load level ${i}`, e);
-            }
+                const num = String(i).padStart(2,'0');
+                const res = await fetch(`levels/level_${num}.json?v=${Date.now()}`);
+                if (res.ok) { const d = await res.json(); this.levels[d.id] = d; }
+            } catch(e) { /* not found */ }
         }
-        console.log(`Loaded ${Object.keys(this.levels).length} levels.`);
-    }
-
-    loadScores() {
-        const stored = localStorage.getItem('train_shunting_scores');
-        if (stored) {
-            this.scores = JSON.parse(stored);
-        }
-    }
-
-    saveScores() {
-        localStorage.setItem('train_shunting_scores', JSON.stringify(this.scores));
     }
 
     startLevel(num) {
         if (!this.levels[num]) return;
-
         const data = this.levels[num];
-        this.levelNum = num;
-        // Deep copy tracks
-        this.tracks = JSON.parse(JSON.stringify(data.tracks));
-        this.target = [...data.targetSequence];
-        this.description = data.description || "";
-        this.capacity = data.capacity || 8;
-        console.log(`DEBUG: Loaded Level ${num}, Capacity: ${this.capacity}, Tracks: ${this.tracks.length}`);
-
-        this.locoTrack = -1;
+        this.levelNum    = num;
+        this.tracks      = JSON.parse(JSON.stringify(data.tracks));
+        this.target      = [...data.targetSequence];
+        this.description = data.description || '';
+        this.capacity    = data.capacity || 8;
+        this.locoTrack   = -1;
         this.selectedCars.clear();
-        this.moves = 0;
-        this.startTime = Date.now();
+        this.moves       = 0;
+        this.startTime   = Date.now();
         this.elapsedTime = 0;
-        this.won = false;
-        this.newRecord = false;
-        this.message = "";
-        this.state = "PLAYING";
+        this.won         = false;
+        this.newRecord   = false;
+        this.lastRank    = 0;
+        this.message     = '';
+        this.messageTimer = 0;
+        this.winSpawned  = false;
+        this.history     = [];
+        particles.p.length = 0;
+        this.state = 'PLAYING';
     }
 
+    // ── Undo ──────────────────────────────────────────────────
+    pushHistory() {
+        this.history.push({
+            tracks:    JSON.parse(JSON.stringify(this.tracks)),
+            locoTrack: this.locoTrack,
+            moves:     this.moves,
+        });
+        if (this.history.length > 40) this.history.shift();
+    }
+
+    undo() {
+        if (this.history.length === 0 || this.won || anim.isActive) return;
+        const s = this.history.pop();
+        this.tracks    = s.tracks;
+        this.locoTrack = s.locoTrack;
+        this.selectedCars.clear();
+        this.moves     = s.moves;
+        this.message   = 'Movimiento deshecho';
+        this.messageTimer = 100;
+    }
+
+    // ── Timer ─────────────────────────────────────────────────
     updateTimer() {
-        if (this.state === "PLAYING" && !this.won) {
-            this.elapsedTime = Math.floor((Date.now() - this.startTime) / 1000);
-        }
-        if (this.messageTimer > 0) {
-            this.messageTimer--;
-            if (this.messageTimer === 0) this.message = "";
-        }
+        if (this.state==='PLAYING' && !this.won)
+            this.elapsedTime = Math.floor((Date.now()-this.startTime)/1000);
+        if (this.messageTimer > 0) { this.messageTimer--; if (!this.messageTimer) this.message=''; }
+        this.scrollVel  *= 0.88; this.scrollY  += this.scrollVel;
+        if (this.scrollY  > 0)              { this.scrollY=0;  this.scrollVel=0; }
+        if (this.scrollY  < -this.maxScroll) { this.scrollY=-this.maxScroll;  this.scrollVel=0; }
+        this.lbScrollVel *= 0.88; this.lbScrollY += this.lbScrollVel;
+        if (this.lbScrollY > 0)               { this.lbScrollY=0;  this.lbScrollVel=0; }
+        if (this.lbScrollY < -this.lbMaxScroll){ this.lbScrollY=-this.lbMaxScroll; this.lbScrollVel=0; }
     }
 
     getTimeStr() {
-        const mins = Math.floor(this.elapsedTime / 60);
-        const secs = this.elapsedTime % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        const m=Math.floor(this.elapsedTime/60), s=this.elapsedTime%60;
+        return `${m}:${String(s).padStart(2,'0')}`;
     }
 
     checkWin() {
-        for (let track of this.tracks) {
-            const cars = track.filter(c => c !== '');
-            if (cars.length === this.target.length &&
-                cars.every((val, index) => val === this.target[index])) {
-                this.won = true;
-                this.state = "WON";
+        for (const track of this.tracks) {
+            const cars = track.filter(c=>c!=='');
+            if (cars.length===this.target.length && cars.every((v,i)=>v===this.target[i])) {
+                this.won   = true;
+                this.state = 'WON';
                 this.handleScore();
                 return true;
             }
@@ -157,865 +380,770 @@ class GameState {
     }
 
     handleScore() {
-        const lid = this.levelNum.toString();
-        const currentMoves = this.moves;
-        let isBest = false;
-
-        if (!this.scores[lid]) {
-            isBest = true;
-        } else {
-            if (currentMoves < this.scores[lid].moves) {
-                isBest = true;
-            }
-        }
-
-        if (isBest) {
-            this.scores[lid] = {
-                moves: currentMoves,
-                time: this.elapsedTime,
-                name: this.playerName
-            };
-            this.saveScores();
-            this.newRecord = true;
-        }
+        const rank = this.scores.addScore(this.levelNum, this.moves, this.elapsedTime, this.playerName);
+        this.lastRank  = rank;
+        this.newRecord = (rank===1);
     }
 
+    // ── Locomotive ────────────────────────────────────────────
+    // Costs a move ONLY when moving an empty loco between different tracks.
+    // First placement (locoTrack === -1) and re-clicking same track are FREE.
     positionLocomotive(trackIdx) {
-        if (this.won) return;
+        if (this.won || anim.isActive) return;
+        const isFirst  = (this.locoTrack === -1);
+        const isSame   = (this.locoTrack === trackIdx);
+
+        if (!isFirst && !isSame) {
+            // Moving empty loco to a different track — costs a move
+            this.pushHistory();
+            this.moves++;
+        }
+
         this.locoTrack = trackIdx;
         this.selectedCars.clear();
-        this.moves++;
 
-        // Auto-select ALL cars
         const track = this.tracks[trackIdx];
-        for (let i = 0; i < track.length; i++) {
-            if (track[i] !== '') {
-                this.selectedCars.add(`${trackIdx},${i}`);
-            } else {
-                break;
-            }
+        for (let i=0; i<track.length; i++) {
+            if (track[i]!=='') this.selectedCars.add(`${trackIdx},${i}`);
+            else break;
         }
     }
 
     selectCar(trackIdx, carIdx) {
-        if (this.won) return;
+        if (this.won || anim.isActive) return;
         if (this.locoTrack !== trackIdx) return;
-
         const track = this.tracks[trackIdx];
-        let selectable = [];
-        for (let i = 0; i < track.length; i++) {
-            if (track[i] !== '') selectable.push(i);
-            else break;
-        }
-
-        if (!selectable.includes(carIdx)) return;
-
+        let sel = [];
+        for (let i=0; i<track.length; i++) { if (track[i]!=='') sel.push(i); else break; }
+        if (!sel.includes(carIdx)) return;
         this.selectedCars.clear();
-        for (let i = 0; i <= carIdx; i++) {
-            if (selectable.includes(i)) {
-                this.selectedCars.add(`${trackIdx},${i}`);
-            }
-        }
+        for (const i of sel) { if (i<=carIdx) this.selectedCars.add(`${trackIdx},${i}`); }
     }
 
+    // ── Move (triggers animation) ─────────────────────────────
     moveSelected(targetTrackIdx) {
-        if (this.won) return;
-        if (this.locoTrack === -1) return;
-        if (this.selectedCars.size === 0) return;
+        if (this.won || anim.isActive) return;
+        if (this.locoTrack===-1 || this.selectedCars.size===0) return;
         if (targetTrackIdx === this.locoTrack) return;
 
-        const sourceTrackIdx = this.locoTrack;
-        // Parse selected cars back to objects
-        let selectedList = Array.from(this.selectedCars).map(s => {
-            const [t, c] = s.split(',').map(Number);
-            return { t, c };
-        });
-        selectedList.sort((a, b) => a.c - b.c);
+        const srcIdx = this.locoTrack;
+        let list = Array.from(this.selectedCars)
+            .map(s=>{ const [t,c]=s.split(',').map(Number); return{t,c}; })
+            .sort((a,b)=>a.c-b.c);
 
-        // Check Capacity
-        const currentTargetCars = this.tracks[targetTrackIdx].filter(c => c !== '');
-        if (currentTargetCars.length + selectedList.length > this.capacity) {
-            this.message = "¡Vía llena! No caben más vagones.";
+        const destCars = this.tracks[targetTrackIdx].filter(c=>c!=='');
+        if (destCars.length + list.length > this.capacity) {
+            this.message      = '¡Vía llena! No caben más vagones.';
             this.messageTimer = 120;
             return;
         }
 
-        let movingCars = [];
-        for (let item of selectedList) {
-            movingCars.push(this.tracks[sourceTrackIdx][item.c]);
-            this.tracks[sourceTrackIdx][item.c] = '';
-        }
+        // Save undo snapshot BEFORE modifying
+        this.pushHistory();
 
-        // Compact source track
-        this.tracks[sourceTrackIdx] = this.tracks[sourceTrackIdx].filter(c => c !== '');
-        while (this.tracks[sourceTrackIdx].length < this.capacity) {
-            this.tracks[sourceTrackIdx].push('');
-        }
+        // Calculate world positions for animation
+        const trackSX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2;
+        const trackSY = CONFIG.HUD_HEIGHT;
+        const srcY    = trackSY + srcIdx     * CONFIG.TRACK_SPACING;
+        const dstY    = trackSY + targetTrackIdx * CONFIG.TRACK_SPACING;
+        const dist    = Math.abs(targetTrackIdx - srcIdx) / Math.max(this.tracks.length-1, 1);
 
-        // Add to target
-        const newTarget = [...movingCars, ...currentTargetCars];
-        this.tracks[targetTrackIdx] = newTarget;
-        while (this.tracks[targetTrackIdx].length < this.capacity) {
-            this.tracks[targetTrackIdx].push('');
-        }
+        // Build car animations
+        const animCars = list.map(item => {
+            const label  = this.tracks[srcIdx][item.c];
+            const carX   = trackSX + item.c * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
+            return { label, waypoints: buildWaypoints(carX, srcY, carX, dstY) };
+        });
 
-        this.locoTrack = -1;
-        this.selectedCars.clear();
+        // Loco travels with first car (offset to loco button position)
+        const locoX        = trackSX - 62;
+        const locoWaypoints = buildWaypoints(locoX, srcY, locoX, dstY);
+
+        // ── Source track: remove moving cars immediately (loco picks them up) ──
+        const moving = list.map(item => this.tracks[srcIdx][item.c]);
+        list.forEach(item => { this.tracks[srcIdx][item.c] = ''; });
+
+        this.tracks[srcIdx] = this.tracks[srcIdx].filter(c=>c!=='');
+        while (this.tracks[srcIdx].length < this.capacity) this.tracks[srcIdx].push('');
+
+        // Destination track stays unchanged during animation — updated in callback
+        // so destination cars only shift when the animated cars actually arrive.
+
         this.moves++;
+        const prevLocoTrack = srcIdx;
+        this.locoTrack      = targetTrackIdx;
+        this.selectedCars.clear();
 
-        this.checkWin();
+        // ── Start animation — apply destination state at completion ──
+        anim.start(animCars, locoWaypoints, prevLocoTrack, targetTrackIdx, list.length, dist, () => {
+            this.tracks[targetTrackIdx] = [...moving, ...destCars];
+            while (this.tracks[targetTrackIdx].length < this.capacity) this.tracks[targetTrackIdx].push('');
+            this.checkWin();
+        });
     }
 }
 
-// Renderer
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const game = new GameState();
+// ─────────────────────────── CANVAS ────────────────────────────
 
-// Camera System
-const camera = {
-    x: 0,
-    y: 0,
-    zoom: 1,
-    isDragging: false,
-    lastX: 0,
-    lastY: 0,
-    lastPinchDist: 0
-};
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const game   = new GameState();
+const camera = { x:0, y:0, zoom:1, isDragging:false, lastX:0, lastY:0, lastPinchDist:0 };
+let animTime = 0;
 
 function resize() {
-    canvas.width = window.innerWidth;
+    canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
-
-    // Auto-fit Logic: Center the 1024x768 "world" content
-    // We want the tracks (approx width 800) to fit.
-    const desiredVisibleWidth = 1024;
-    const scale = canvas.width / desiredVisibleWidth;
-
-    // Set initial zoom to fit width, but clamp it reasonable
-    // Only auto-zoom if it's the first load or if we want responsive reset
-    // For now: just set a reasonable default if not set? 
-    // Actually, let's just center the world.
-
-    // If mobile (portrait), we might need smaller zoom
-    if (canvas.width < 768) {
-        camera.zoom = canvas.width / 1024; // Shrink to fit
-    } else {
-        camera.zoom = 1;
-    }
-
-    // Center logic:
-    // visibleW = canvas.width / zoom
-    // We want CONFIG.DEFAULT_WIDTH/2 to be at canvas.width/2
-    // offset X = (canvas.width - CONFIG.DEFAULT_WIDTH * zoom) / 2
-    camera.x = (canvas.width - CONFIG.DEFAULT_WIDTH * camera.zoom) / 2;
-    camera.y = 50 * camera.zoom; // Slight top padding
+    camera.zoom   = canvas.width < 768 ? canvas.width/1024 : 1;
+    camera.x = (canvas.width  - CONFIG.DEFAULT_WIDTH  * camera.zoom) / 2;
+    camera.y = (canvas.height - CONFIG.DEFAULT_HEIGHT * camera.zoom) / 4;
 }
 window.addEventListener('resize', resize);
-// Force initial resize to ensure canvas.width is correct before game loop or menu logic runs.
 resize();
 
-// Input Handling
-// Helper to get distance between two touch points
-function getPinchDist(t1, t2) {
-    const dx = t1.clientX - t2.clientX;
-    const dy = t1.clientY - t2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
+// ──────────────────────── INPUT HANDLING ───────────────────────
+
+function getPinchDist(t1,t2) {
+    const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;
+    return Math.sqrt(dx*dx+dy*dy);
 }
+let dragMoved=false, downX=0, downY=0;
 
-// Mouse Down / Touch Start
-function onPointerDown(x, y, isSecond = false) {
-    if (game.state === "MENU") return; // Menu handles its own scrolling/clicks roughly
-
-    camera.isDragging = true;
-    camera.lastX = x;
-    camera.lastY = y;
+function onPointerDown(x,y) {
+    camera.isDragging=true; camera.lastX=x; camera.lastY=y;
+    dragMoved=false; downX=x; downY=y;
 }
-
-// Mouse Move / Touch Move
-function onPointerMove(x, y, isPinch = false, dist = 0) {
-    if (game.state === "MENU") return;
+function onPointerMove(x,y,isPinch=false,dist=0) {
     if (!camera.isDragging) return;
-
     if (isPinch) {
-        // Handle Zoom
-        if (camera.lastPinchDist > 0) {
-            const delta = dist / camera.lastPinchDist;
-            const newZoom = camera.zoom * delta;
-
-            // Limit Zoom
-            if (newZoom > 0.4 && newZoom < 3.0) {
-                // Zoom towards center (simplified)
-                // To zoom towards specific point is complex without more state. 
-                // Let's just update zoom.
-                camera.zoom = newZoom;
-            }
-        }
-        camera.lastPinchDist = dist;
-    } else {
-        // Handle Pan
-        const dx = x - camera.lastX;
-        const dy = y - camera.lastY;
-        camera.x += dx;
-        camera.y += dy;
-        camera.lastX = x;
-        camera.lastY = y;
+        if (camera.lastPinchDist>0) { const d=dist/camera.lastPinchDist, nz=camera.zoom*d; if(nz>0.3&&nz<3) camera.zoom=nz; }
+        camera.lastPinchDist=dist; return;
     }
+    const dx=x-camera.lastX, dy=y-camera.lastY;
+    if (Math.abs(x-downX)>5||Math.abs(y-downY)>5) dragMoved=true;
+    if (game.state==='MENU')          { game.scrollY+=dy;   game.scrollVel=dy;  }
+    else if (game.state==='LEADERBOARD'){ game.lbScrollY+=dy; game.lbScrollVel=dy; }
+    else                              { camera.x+=dx; camera.y+=dy; }
+    camera.lastX=x; camera.lastY=y;
+}
+function onPointerUp(sx,sy) {
+    if (!dragMoved && sx!==undefined) handleClick(sx,sy);
+    camera.isDragging=false; camera.lastPinchDist=0;
 }
 
-// Mouse Up / Touch End
-function onPointerUp() {
-    camera.isDragging = false;
-    camera.lastPinchDist = 0;
-}
-
-// Touch Events
-canvas.addEventListener('touchstart', (e) => {
-    // If 1 touch: click checking is done in 'click' or manual 'touchend' detection?
-    // Actually 'mousedown' logic above handles "clicks" but we need to distinguish simple tap vs drag.
-    // The previous mousedown code executes game logic immediately. 
-    // We should separate "Input Action" from "Camera Move".
-
-    if (e.touches.length === 1) {
-        const t = e.touches[0];
-        // We still trigger the 'mousedown' logic for UI interaction?
-        // Let's pass to mousedown handler for "start drag" logic
-        onPointerDown(t.clientX, t.clientY);
-    } else if (e.touches.length === 2) {
-        camera.isDragging = true;
-        camera.lastPinchDist = getPinchDist(e.touches[0], e.touches[1]);
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault(); // Prevent scrolling
-    if (e.touches.length === 1) {
-        const t = e.touches[0];
-        onPointerMove(t.clientX, t.clientY);
-    } else if (e.touches.length === 2) {
-        const dist = getPinchDist(e.touches[0], e.touches[1]);
-        onPointerMove(0, 0, true, dist);
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-    onPointerUp();
-});
-
-// Mouse Events
-canvas.addEventListener('mousedown', (e) => {
-    // We keep the original mousedown for GAME LOGIC (clicking buttons/cars)
-    // But we also want to start dragging if we didn't hit a button?
-    // Or simpler: Middle mouse / Right mouse to drag? 
-    // OR: Drag background to pan. Click object to interact.
-
-    // Let's rely on the top-level 'mousedown' listener (the big one below) for game logic
-    // We need to differentiate "Click" vs "Drag".
-    // Usually: MouseDown -> sets 'potentialClick = true'
-    // MouseMove -> sets 'potentialClick = false'
-    // MouseUp -> if potentialClick, trigger logic.
-
-    // For now, let's enable Drag on Right Click or Middle Click, or plain Left Drag if it doesn't hit UI?
-    // The user asked specifically for "desplazar ajustar la pantalla".
-    // Let's assume Left Click Drag is PAN, unless we hit a clickable object.
-
-    // Actually, the original 'mousedown' listener is HUGE and handles all logic. 
-    // We need to preserve that. 
-    // If I replace 'mousedown' completely, I must ensure logic is preserved.
-    // I will REPLACE the original 'mousedown' listener logic with a NEW one that handles Coordinate Transforms.
-
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    onPointerDown(mx, my);
-});
-
-canvas.addEventListener('mousemove', (e) => {
-    if (e.buttons === 1) { // Left click drag
-        const rect = canvas.getBoundingClientRect();
-        onPointerMove(e.clientX - rect.left, e.clientY - rect.top);
-    }
-});
-
-canvas.addEventListener('mouseup', onPointerUp);
-canvas.addEventListener('wheel', (e) => {
-    if (game.state === "MENU") {
-        game.scrollY -= e.deltaY;
-        if (game.scrollY > 0) game.scrollY = 0;
-        if (game.scrollY < -game.maxScroll) game.scrollY = -game.maxScroll;
-    } else {
-        // Zoom on scroll
-        const zoomSpeed = 0.001;
-        const newZoom = camera.zoom - e.deltaY * zoomSpeed;
-        if (newZoom > 0.4 && newZoom < 3.0) {
-            // center zoom around mouse pointer would be best, but simple zoom is fine
-            camera.zoom = newZoom;
-        }
-    }
+canvas.addEventListener('touchstart',e=>{
+    if (e.touches.length===1) { const t=e.touches[0]; onPointerDown(t.clientX,t.clientY); }
+    else if (e.touches.length===2) { camera.isDragging=true; camera.lastPinchDist=getPinchDist(e.touches[0],e.touches[1]); dragMoved=true; }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
     e.preventDefault();
-}, { passive: false });
+    if (e.touches.length===1) { const t=e.touches[0]; onPointerMove(t.clientX,t.clientY); }
+    else if (e.touches.length===2) onPointerMove(0,0,true,getPinchDist(e.touches[0],e.touches[1]));
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+    if (e.changedTouches.length===1&&e.touches.length===0) { const t=e.changedTouches[0]; onPointerUp(t.clientX,t.clientY); }
+    else camera.isDragging=false;
+});
+canvas.addEventListener('mousedown',e=>{ const r=canvas.getBoundingClientRect(); onPointerDown(e.clientX-r.left,e.clientY-r.top); });
+canvas.addEventListener('mousemove',e=>{ if(e.buttons===1){const r=canvas.getBoundingClientRect();onPointerMove(e.clientX-r.left,e.clientY-r.top);} });
+canvas.addEventListener('mouseup',e=>{ const r=canvas.getBoundingClientRect(); onPointerUp(e.clientX-r.left,e.clientY-r.top); });
+canvas.addEventListener('wheel',e=>{
+    e.preventDefault();
+    if (game.state==='MENU')          game.scrollY   -= e.deltaY;
+    else if (game.state==='LEADERBOARD') game.lbScrollY -= e.deltaY;
+    else { const z=camera.zoom-e.deltaY*0.001; if(z>0.3&&z<3) camera.zoom=z; }
+},{passive:false});
 
+// ───────────────────────── CLICK LOGIC ─────────────────────────
 
-// REPLACING 'mousedown' event with the new logic that supports World/Screen separation.
-// The old one is removed by NOT including it in this ReplacementChunk (it's being overwritten).
-canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+function handleClick(mx,my) {
+    const w=canvas.width, h=canvas.height;
 
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // We only trigger game actions if we are NOT dragging considerably.
-    // But implementing drag-threshold is tricky in 'mousedown'. 
-    // Actually, we usually trigger on 'mouseup' or 'click' for actions to distiguish drag.
-    // BUT the original code used 'mousedown'. 
-    // FOR SIMPLICITY: We will allow actions on mousedown.
-    // Use Right-Click for Pan only? And Left for interacting + Pan?
-    // Let's treat standard Left Click as "Interact". 
-    // The User can Pan by dragging on "Empty Space".
-    // Detailed hit detection is needed.
-
-    if (game.state === "MENU") {
-        // Scroll
-        // Exit (Top Right)
-        if (mx > w - 100 && mx < w - 20 && my > 20 && my < 60) {
-            location.reload();
-        }
-
-        const layout = getMenuLayout(w, h);
-        const { cols, btnW, btnH, gapX, gapY, startX, startY: baseStartY } = layout;
-        const startY = baseStartY + game.scrollY;
-
-        const sortedIds = Object.keys(game.levels).map(Number).sort((a, b) => a - b);
-
-        sortedIds.forEach((lid, idx) => {
-            const row = Math.floor(idx / cols);
-            const col = idx % cols;
-            const x = startX + col * (btnW + gapX);
-            const y = startY + row * (btnH + gapY);
-
-            // Optimization: Don't check click if outside viewport
-            if (y + btnH < 250 || y > h) return;
-
-            if (mx >= x && mx <= x + btnW && my >= y && my <= y + btnH) {
-                game.startLevel(lid);
-            }
+    if (game.state==='MENU') {
+        if (inRect(mx,my,w-200,12,188,42)) { game.state='LEADERBOARD'; game.lbScrollY=0; return; }
+        const layout=getMenuLayout(w,h);
+        const {cols,btnW,btnH,gapX,gapY,startX,startY:base}=layout;
+        const startY=base+game.scrollY;
+        const ids=Object.keys(game.levels).map(Number).sort((a,b)=>a-b);
+        ids.forEach((lid,idx)=>{
+            const row=Math.floor(idx/cols), col=idx%cols;
+            const x=startX+col*(btnW+gapX), y=startY+row*(btnH+gapY);
+            if (y+btnH<200||y>h) return;
+            if (inRect(mx,my,x,y,btnW,btnH)) game.startLevel(lid);
         });
+        return;
+    }
 
-    } else if (game.state === "PLAYING" || game.state === "WON") {
-        // --- UI CLICKS (Screen Coordinates) ---
-        // Menu Button
-        if (mx >= 20 && mx <= 100 && my >= 20 && my <= 50) {
-            game.state = "MENU";
+    if (game.state==='LEADERBOARD') {
+        if (inRect(mx,my,20,20,130,42)) { game.state='MENU'; return; }
+        return;
+    }
+
+    if (game.state==='PLAYING'||game.state==='WON') {
+        if (inRect(mx,my,10,11,80,38))  { game.state='MENU'; return; }
+
+        if (game.state==='PLAYING') {
+            if (inRect(mx,my,100,11,105,38)) { game.startLevel(game.levelNum); return; }
+            // Undo button
+            if (game.history.length>0 && !anim.isActive) {
+                if (inRect(mx,my,215,11,85,38)) { game.undo(); return; }
+            }
+            // Bottom restart
+            if (inRect(mx,my,w/2-110,h-52,105,40)) { game.startLevel(game.levelNum); return; }
+        }
+
+        if (game.state==='WON') {
+            const cardH=winCardH(w), cardY=h/2-cardH/2, btnY=cardY+cardH-58;
+            if (inRect(mx,my,w/2-220,btnY,125,44)) { game.startLevel(game.levelNum); return; }
+            if (inRect(mx,my,w/2-60, btnY,120,44)) { game.state='MENU'; return; }
+            if (game.levels[game.levelNum+1] && inRect(mx,my,w/2+80,btnY,140,44)) {
+                game.startLevel(game.levelNum+1); return;
+            }
             return;
         }
 
-        if (game.state === "PLAYING") {
-            // Restart Header
-            if (mx >= 110 && mx <= 190 && my >= 20 && my <= 50) {
-                game.startLevel(game.levelNum);
+        // World clicks
+        const wx=(mx-camera.x)/camera.zoom, wy=(my-camera.y)/camera.zoom;
+        const trackSX=(CONFIG.DEFAULT_WIDTH-CONFIG.TRACK_WIDTH)/2, trackSY=CONFIG.HUD_HEIGHT;
+        const hasMoveReady = !anim.isActive && game.locoTrack!==-1 && game.selectedCars.size>0;
+        for (let i=0; i<game.tracks.length; i++) {
+            const ty=trackSY+i*CONFIG.TRACK_SPACING;
+            const locoX=trackSX-62;
+            // Loco button: if cars selected and different track → move; else → place loco
+            if (inRect(wx,wy,locoX,ty+2,52,CONFIG.CAR_HEIGHT-4)) {
+                if (hasMoveReady && i!==game.locoTrack) game.moveSelected(i);
+                else game.positionLocomotive(i);
                 return;
             }
-
-            // Bottom Restart
-            const resetX = w / 2 - 100;
-            const resetY = h - 80;
-            if (mx >= resetX && mx <= resetX + 90 && my >= resetY && my <= resetY + 40) {
-                game.startLevel(game.levelNum);
-                return;
-            }
-        }
-
-        if (game.state === "WON") {
-            // Next
-            if (game.levels[game.levelNum + 1]) {
-                const nextX = w / 2 + 10;
-                const nextY = h - 80;
-                if (mx >= nextX && mx <= nextX + 90 && my >= nextY && my <= nextY + 40) {
-                    game.startLevel(game.levelNum + 1);
-                    return;
+            // Click anywhere on a different track's area → move selected cars there
+            if (hasMoveReady && i!==game.locoTrack) {
+                if (inRect(wx,wy,trackSX-4,ty-4,CONFIG.TRACK_WIDTH+8,CONFIG.CAR_HEIGHT+8)) {
+                    game.moveSelected(i); return;
                 }
             }
-
-            // Replay
-            const replayX = w / 2 - 100;
-            const replayY = h - 80;
-            if (mx >= replayX && mx <= replayX + 90 && my >= replayY && my <= replayY + 40) {
-                game.startLevel(game.levelNum);
-                return;
+            // Car click on loco's track → adjust selection
+            const track=game.tracks[i];
+            for (let j=0; j<track.length; j++) {
+                if (track[j]==='') continue;
+                const cx=trackSX+j*(CONFIG.CAR_WIDTH+CONFIG.CAR_SPACING);
+                if (inRect(wx,wy,cx,ty,CONFIG.CAR_WIDTH,CONFIG.CAR_HEIGHT)) { game.selectCar(i,j); return; }
             }
-
-            // Menu Overlay
-            const menuX = w / 2 - 45;
-            const menuY = h - 140;
-            if (mx >= menuX && mx <= menuX + 90 && my >= menuY && my <= menuY + 40) {
-                game.state = "MENU";
-                return;
-            }
-            // If we are WON, we don't process world clicks
-            return;
-        }
-
-        // --- WORLD CLICKS (Transformed Coordinates) ---
-        // Convert screen (mx, my) to world (wx, wy)
-        const wx = (mx - camera.x) / camera.zoom;
-        const wy = (my - camera.y) / camera.zoom;
-
-        const trackStartX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2; // Original logic based
-        // Actually, we should keep trackStartX relative to the world origin.
-        // In the original code: trackStartX = (w - CONFIG.TRACK_WIDTH) / 2;
-        // BUT now 'w' varies. For the world, let's assume a fixed "Virtual Width" or just center it around 0 or keep usage of DEFAULT_WIDTH.
-        // Let's stick to a fixed world layout.
-        // We will define the "World Center" as roughly (1024/2, 768/2) or just use the same coordinates as before but effectively they are now "World Coordinates".
-        // To keep it simple, let's assume the World Coordinate System matches the Default Desktop Resolution (1024x768).
-        // So trackStartX is fixed based on 1024.
-
-        const worldW = CONFIG.DEFAULT_WIDTH;
-        const worldTrackStartX = (worldW - CONFIG.TRACK_WIDTH) / 2;
-        const worldTrackStartY = 150;
-
-        // Tracks & Cars
-        for (let i = 0; i < game.tracks.length; i++) {
-            const y = worldTrackStartY + i * CONFIG.TRACK_SPACING;
-
-            // Loco Button
-            const btnX = worldTrackStartX - 60;
-            if (wx >= btnX && wx <= btnX + 50 && wy >= y && wy <= y + 40) {
-                game.positionLocomotive(i);
-            }
-
-            // Move Here Button
-            if (game.locoTrack !== -1 && game.selectedCars.size > 0 && i !== game.locoTrack) {
-                const moveX = worldTrackStartX - 180;
-                if (wx >= moveX && wx <= moveX + 110 && wy >= y && wy <= y + 40) {
-                    game.moveSelected(i);
-                }
-            }
-
-            // Cars
-            const track = game.tracks[i];
-            for (let j = 0; j < track.length; j++) {
-                if (track[j] === '') continue;
-                const cx = worldTrackStartX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
-                if (wx >= cx && wx <= cx + CONFIG.CAR_WIDTH && wy >= y && wy <= y + CONFIG.CAR_HEIGHT) {
-                    game.selectCar(i, j);
-                }
-            }
-        }
-    }
-});
-
-window.addEventListener('wheel', (e) => {
-    if (game.state === "MENU") {
-        game.scrollY -= e.deltaY;
-        if (game.scrollY > 0) game.scrollY = 0;
-        if (game.scrollY < -game.maxScroll) game.scrollY = -game.maxScroll;
-    }
-});
-
-// Drawing Helpers
-function getMenuLayout(w, h) {
-    // console.log("Menu Width:", w);
-    let cols = 5;
-    let btnW = 140;
-    const btnH = 80;
-    const gapX = 20;
-    const gapY = 20;
-
-    // Responsive logic
-    // Adjusted breakpoints for better mobile detection (iPhone Max is ~428px, usually < 500 works but let's be safe)
-    // If we're seeing 3 cols on mobile, width > 500. Let's bump it.
-    if (w < 600) {
-        cols = 2;
-        const availableW = w - 40;
-        btnW = (availableW - (cols - 1) * gapX) / cols;
-    } else if (w < 900) {
-        cols = 3;
-    } else if (w < 1200) {
-        cols = 4;
-    }
-
-    // Clamp btnW? No, let it be flexible or fixed.
-    // Recalculate gridW
-    const gridW = cols * btnW + (cols - 1) * gapX;
-    const startX = (w - gridW) / 2;
-    // We MUST use the same startY base for consistency
-    const startY = 250;
-
-    return { cols, btnW, btnH, gapX, gapY, startX, startY };
-}
-
-function drawRect(x, y, w, h, color, radius = 0, border = null) {
-    ctx.fillStyle = color;
-    if (radius > 0) {
-        ctx.beginPath();
-        // Check browser support for roundRect - polyfill or fallback
-        if (ctx.roundRect) {
-            ctx.roundRect(x, y, w, h, radius);
-        } else {
-            ctx.rect(x, y, w, h); // Fallback
-        }
-        ctx.fill();
-        if (border) {
-            ctx.strokeStyle = border.color;
-            ctx.lineWidth = border.width;
-            ctx.stroke();
-        }
-    } else {
-        ctx.fillRect(x, y, w, h);
-        if (border) {
-            ctx.strokeStyle = border.color;
-            ctx.lineWidth = border.width;
-            ctx.strokeRect(x, y, w, h);
         }
     }
 }
+function inRect(px,py,rx,ry,rw,rh){ return px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh; }
 
-function drawText(text, x, y, size, color, align = "left") {
-    ctx.fillStyle = color;
-    ctx.font = `${size}px Arial`;
-    ctx.textAlign = align;
-    ctx.fillText(text, x, y);
+// ────────────────────────── MENU LAYOUT ────────────────────────
+
+function getMenuLayout(w) {
+    let cols=5, btnW=140;
+    const btnH=90, gapX=16, gapY=16;
+    if      (w<500) { cols=2; btnW=(w-48-gapX)/2; }
+    else if (w<750) { cols=3; }
+    else if (w<1050){ cols=4; }
+    const gridW=cols*btnW+(cols-1)*gapX, startX=(w-gridW)/2;
+    return { cols, btnW, btnH, gapX, gapY, startX, startY:210 };
 }
+function winCardH(w){ return w<600?380:420; }
 
-function drawTrack(x, y, width) {
-    // Sleepers
-    const sleeperW = 10;
-    const sleeperH = 30;
-    const spacing = 20;
-    for (let sx = x; sx < x + width; sx += spacing) {
-        drawRect(sx, y - sleeperH / 2, sleeperW, sleeperH, CONFIG.COLORS.SLEEPER);
-    }
-    // Rails
-    const railOffset = 8;
-    ctx.strokeStyle = CONFIG.COLORS.RAIL;
-    ctx.lineWidth = 4;
+// ─────────────────────── DRAWING HELPERS ───────────────────────
+
+function rr(x,y,w,h,r=0){ if(r>0&&ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}else{ctx.beginPath();ctx.rect(x,y,w,h);} }
+function fillRR(x,y,w,h,r,color){ ctx.fillStyle=color; rr(x,y,w,h,r); ctx.fill(); }
+function strokeRR(x,y,w,h,r,color,lw=1.5){ ctx.strokeStyle=color; ctx.lineWidth=lw; rr(x,y,w,h,r); ctx.stroke(); }
+function txt(text,x,y,size,color,align='left',weight='600'){
+    ctx.fillStyle=color; ctx.font=`${weight} ${size}px Rajdhani,Arial,sans-serif`;
+    ctx.textAlign=align; ctx.fillText(text,x,y);
+}
+function drawStar(cx,cy,r,filled){
     ctx.beginPath();
-    ctx.moveTo(x, y - railOffset);
-    ctx.lineTo(x + width, y - railOffset);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y + railOffset);
-    ctx.lineTo(x + width, y + railOffset);
-    ctx.stroke();
+    for(let i=0;i<10;i++){ const a=(i*Math.PI)/5-Math.PI/2, rad=i%2===0?r:r*0.42;
+        const x=cx+Math.cos(a)*rad, y=cy+Math.sin(a)*rad; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.closePath(); ctx.fillStyle=filled?C.STAR_ON:C.STAR_OFF; ctx.fill();
+    if(filled){ ctx.strokeStyle='rgba(255,215,0,0.5)'; ctx.lineWidth=1; ctx.stroke(); }
+}
+function formatTime(secs){ const m=Math.floor(secs/60),s=secs%60; return `${m}:${String(s).padStart(2,'0')}`; }
+
+// ─────────────────────── BACKGROUND ────────────────────────────
+
+function drawBackground(w,h){
+    const grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,C.BG_TOP); grad.addColorStop(1,C.BG_BOT);
+    ctx.fillStyle=grad; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle=C.GRID; ctx.lineWidth=1;
+    for(let x=0;x<w;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+    for(let y=0;y<h;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
 }
 
-// Car Visual Styles
-const CAR_STYLES = {
-    0: { name: "Boxcar", color: "#8B4513", detail: "#643200" },     // Brown
-    1: { name: "Hopper", color: "#808080", detail: "#505050" },     // Gray
-    2: { name: "Gondola", color: "#228B22", detail: "#145014" },    // Green
-    3: { name: "Tanker", color: "#282828", detail: "#646464" },     // Black
-    4: { name: "Container", color: "#505050", detail: "#C0C0C0" }   // Dark/Silver
-};
+// ───────────────────────── TRACK ───────────────────────────────
 
-function drawTrainIcon(x, y, color = CONFIG.COLORS.LOCO_BTN) {
-    drawRect(x, y, 60, 40, color, 4);
-    ctx.fillStyle = "#323232";
-    ctx.fillRect(x + 40, y - 15, 20, 15);
-    ctx.fillRect(x + 10, y - 10, 10, 10);
+function drawTrack(x,y,width){
+    fillRR(x-6,y-18,width+12,36,2,C.BALLAST);
+    const slW=13,slH=30,slGap=18;
+    for(let sx=x;sx<x+width;sx+=slGap){
+        ctx.fillStyle=(Math.floor(sx/slGap)%2===0)?C.SLEEPER_A:C.SLEEPER_B;
+        ctx.fillRect(sx-1,y-slH/2,slW,slH);
+    }
+    for(const off of[-10,10]){
+        const rg=ctx.createLinearGradient(x,y+off-4,x,y+off+4);
+        rg.addColorStop(0,C.RAIL_HI); rg.addColorStop(1,C.RAIL_LO);
+        ctx.fillStyle=rg; ctx.fillRect(x,y+off-3,width,6);
+    }
+}
 
-    ctx.beginPath(); ctx.arc(x + 15, y + 40, 10, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + 45, y + 40, 10, 0, Math.PI * 2); ctx.fill();
+// ─────────────────────────── PEINE ─────────────────────────────
+// Fan/tree structure: single trunk enters from the left and branches
+// diagonally to each track — like a real railway switch fan (peine).
 
-    ctx.fillStyle = "#505050";
+function drawPeineBranch(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    // S-curve: horizontal tangents at both ends (cp offset = 50% of dx)
+    const cpx1 = x1 + dx * 0.5, cpy1 = y1;
+    const cpx2 = x2 - dx * 0.5, cpy2 = y2;
+
+    const GAUGE   = 10;   // ±10px — same as drawTrack's ±10 offset
+    const BALLAST = 18;   // ±18px — same as drawTrack's y-18 padding
+    const N       = 28;   // sample points along the curve
+
+    // Sample curve points + perpendicular normals
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+        const t  = i / N;
+        const px = cbez(t, x1, cpx1, cpx2, x2);
+        const py = cbez(t, y1, cpy1, cpy2, y2);
+        const tx = cbezD(t, x1, cpx1, cpx2, x2);
+        const ty = cbezD(t, y1, cpy1, cpy2, y2);
+        const len = Math.sqrt(tx*tx+ty*ty) || 1;
+        pts.push({ x: px, y: py, nx: -ty/len, ny: tx/len });
+    }
+
+    // Ballast: filled strip between outer edges
     ctx.beginPath();
-    ctx.moveTo(x, y + 40);
-    ctx.lineTo(x - 10, y + 40);
-    ctx.lineTo(x, y + 20);
+    pts.forEach((p,i) => {
+        const ox = p.x + p.nx*BALLAST, oy = p.y + p.ny*BALLAST;
+        i===0 ? ctx.moveTo(ox,oy) : ctx.lineTo(ox,oy);
+    });
+    for (let i=pts.length-1; i>=0; i--) {
+        ctx.lineTo(pts[i].x - pts[i].nx*BALLAST, pts[i].y - pts[i].ny*BALLAST);
+    }
+    ctx.closePath();
+    ctx.fillStyle = C.BALLAST;
     ctx.fill();
-}
 
-function drawCar(x, y, label, isSelected) {
-    const w = CONFIG.CAR_WIDTH;
-    const h = CONFIG.CAR_HEIGHT;
-
-    // Determine Type
-    const carType = label.charCodeAt(0) % 5;
-    const style = CAR_STYLES[carType] || CAR_STYLES[0];
-
-    let baseColor = style.color;
-    let detailColor = style.detail;
-
-    if (isSelected) {
-        baseColor = CONFIG.COLORS.SELECTED;
-        detailColor = "#000064";
+    // Sleepers perpendicular to curve
+    const approxLen = Math.sqrt(dx*dx+(y2-y1)*(y2-y1));
+    const numTies   = Math.max(3, Math.floor(approxLen/14));
+    for (let k=1; k<numTies; k++) {
+        const t  = k/numTies;
+        const bx = cbez(t, x1, cpx1, cpx2, x2);
+        const by = cbez(t, y1, cpy1, cpy2, y2);
+        const tx = cbezD(t, x1, cpx1, cpx2, x2);
+        const ty = cbezD(t, y1, cpy1, cpy2, y2);
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(Math.atan2(ty, tx));
+        ctx.fillStyle = k%2===0 ? C.SLEEPER_A : C.SLEEPER_B;
+        ctx.fillRect(-6, -15, 13, 30);  // same proportions as drawTrack sleepers
+        ctx.restore();
     }
 
-    // --- DRAWING ---
-
-    // 0: Boxcar (Ribs)
-    if (carType === 0) {
-        drawRect(x, y, w, h, baseColor, 2, { color: detailColor, width: 2 });
-        ctx.strokeStyle = detailColor;
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 4; i++) {
-            const lx = x + i * (w / 4);
-            ctx.beginPath(); ctx.moveTo(lx, y + 2); ctx.lineTo(lx, y + h - 2); ctx.stroke();
-        }
-    }
-    // 1: Hopper (Hatches)
-    else if (carType === 1) {
-        drawRect(x, y, w, h, baseColor, 2, { color: detailColor, width: 2 });
-        ctx.fillStyle = detailColor;
-        ctx.fillRect(x + 10, y + 8, 16, 24);
-        ctx.fillRect(x + 34, y + 8, 16, 24);
-    }
-    // 2: Gondola (Open Top)
-    else if (carType === 2) {
-        drawRect(x, y, w, h, baseColor, 2);
-        // Load
-        ctx.fillStyle = detailColor;
-        ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
-        drawRect(x, y, w, h, "rgba(0,0,0,0)", 2, { color: detailColor, width: 2 }); // Border
-        // Texture
-        ctx.fillStyle = baseColor;
-        for (let i = 0; i < 30; i += 8) {
-            ctx.beginPath(); ctx.arc(x + 10 + i, y + 12, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + 20 + i, y + 28, 3, 0, Math.PI * 2); ctx.fill();
-        }
-    }
-    // 3: Tanker (Capsule)
-    else if (carType === 3) {
-        // Platform
-        ctx.strokeStyle = detailColor;
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke();
-        // Tank
-        drawRect(x + 2, y + 4, w - 4, h - 8, baseColor, 12, { color: detailColor, width: 2 });
-        // Dome
-        ctx.fillStyle = detailColor;
-        ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = detailColor;
-        ctx.lineWidth = 1;
+    // Rails — polylines through perpendicular-offset sample points
+    for (const sign of [-1, 1]) {
+        ctx.strokeStyle = sign > 0 ? C.RAIL_HI : C.RAIL_LO;
+        ctx.lineWidth   = 6;       // same height as drawTrack rails
+        ctx.lineJoin    = 'round';
+        ctx.beginPath();
+        pts.forEach((p,i) => {
+            const rx = p.x + p.nx*GAUGE*sign;
+            const ry = p.y + p.ny*GAUGE*sign;
+            i===0 ? ctx.moveTo(rx,ry) : ctx.lineTo(rx,ry);
+        });
         ctx.stroke();
     }
-    // 4: Container (Platform + Box)
-    else if (carType === 4) {
-        // Platform
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(x, y + 10, w, 20);
-        // Container
-        drawRect(x + 5, y + 2, w - 10, h - 4, detailColor, 2, { color: baseColor, width: 2 });
-        // Corrugated
-        ctx.strokeStyle = baseColor;
-        ctx.lineWidth = 1;
-        for (let i = x + 10; i < x + w - 10; i += 5) {
-            ctx.beginPath(); ctx.moveTo(i, y + 4); ctx.lineTo(i, y + h - 6); ctx.stroke();
-        }
+    ctx.lineJoin = 'miter';
+}
+
+function drawPeine(trackCount, trackSX, trackSY) {
+    const convX   = CONFIG.PEINE_X + 30;  // 60 — convergence (trunk) X
+    const fanEndX = trackSX - 70;          // 142 — fan right edge, connects to loco zone
+    // Vertical center of all tracks
+    const convY   = trackSY + ((trackCount-1)/2) * CONFIG.TRACK_SPACING + CONFIG.CAR_HEIGHT/2;
+
+    // Trunk: main line enters from off-screen left to convergence point
+    drawTrack(-10, convY, convX + 10);
+
+    // Fan branches: one curved diagonal branch per track
+    for (let i=0; i<trackCount; i++) {
+        const ty = trackSY + i*CONFIG.TRACK_SPACING + CONFIG.CAR_HEIGHT/2;
+        drawPeineBranch(convX, convY, fanEndX, ty);
     }
 
-    // Wheels
-    const whW = 12;
-    const whH = 6;
-    ctx.fillStyle = "#1E1E1E";
-    ctx.fillRect(x + 5, y - 3, whW, whH);
-    ctx.fillRect(x + w - 5 - whW, y - 3, whW, whH);
-    ctx.fillRect(x + 5, y + h - 3, whW, whH);
-    ctx.fillRect(x + w - 5 - whW, y + h - 3, whW, whH);
+    // Horizontal connecting sections from fan end to track area start
+    // (this is where the loco button sits — drawn on top separately)
+    for (let i=0; i<trackCount; i++) {
+        const ty = trackSY + i*CONFIG.TRACK_SPACING + CONFIG.CAR_HEIGHT/2;
+        drawTrack(fanEndX, ty, trackSX - fanEndX);
+    }
 
-    // Label with shadow
-    ctx.fillStyle = "#000000";
-    ctx.font = "bold 18px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(label, x + w / 2 + 1, y + h / 2 + 7); // Shadow
+    // Junction nodes at fan tips (fanEndX)
+    for (let i=0; i<trackCount; i++) {
+        const ty = trackSY + i*CONFIG.TRACK_SPACING + CONFIG.CAR_HEIGHT/2;
+        ctx.fillStyle = C.PEINE_NODE;
+        ctx.beginPath(); ctx.arc(fanEndX, ty, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = C.BALLAST;
+        ctx.beginPath(); ctx.arc(fanEndX, ty, 2.5, 0, Math.PI*2); ctx.fill();
+    }
 
-    ctx.fillStyle = CONFIG.COLORS.BTN_TEXT;
-    ctx.fillText(label, x + w / 2, y + h / 2 + 6);
+    // Convergence node
+    ctx.fillStyle = C.PEINE_NODE;
+    ctx.beginPath(); ctx.arc(convX, convY, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.BG_TOP;
+    ctx.beginPath(); ctx.arc(convX, convY, 4, 0, Math.PI*2); ctx.fill();
 }
 
-function drawButton(x, y, w, h, text, color) {
-    drawRect(x, y, w, h, color, 4, { color: "rgba(0,0,0,0.3)", width: 2 });
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.fillRect(x, y, w, h / 2);
-    drawText(text, x + w / 2, y + h / 2 + 6, 16, CONFIG.COLORS.BTN_TEXT, "center");
+// ────────────────────────── CAR ────────────────────────────────
+
+function drawCar(x,y,label,isSelected){
+    const w=CONFIG.CAR_WIDTH, h=CONFIG.CAR_HEIGHT;
+    const ct=label.charCodeAt(0)%CAR_TYPES.length, st=CAR_TYPES[ct];
+    if (isSelected){ const pulse=0.5+0.5*Math.sin(animTime*5); ctx.shadowBlur=16+pulse*14; ctx.shadowColor=C.CAR_GLOW; }
+    const bg=ctx.createLinearGradient(x,y,x,y+h); bg.addColorStop(0,st.hi); bg.addColorStop(1,st.lo);
+    ctx.fillStyle=bg; rr(x,y,w,h,4); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.16)'; ctx.fillRect(x+2,y+2,w-4,h*0.35);
+    ctx.strokeStyle=st.ac; ctx.lineWidth=1.5;
+    if      (ct===0){ for(let i=1;i<4;i++){const lx=x+i*(w/4);ctx.beginPath();ctx.moveTo(lx,y+3);ctx.lineTo(lx,y+h-3);ctx.stroke();} }
+    else if (ct===1){ fillRR(x+8,y+8,18,22,2,st.ac); fillRR(x+34,y+8,18,22,2,st.ac); }
+    else if (ct===2){ fillRR(x+4,y+5,w-8,h-10,2,st.ac); ctx.fillStyle='rgba(255,255,255,0.06)'; for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x+14+i*16,y+h/2+2,3.5,0,Math.PI*2);ctx.fill();} }
+    else if (ct===3){ fillRR(x+3,y+7,w-6,h-14,12,st.ac); ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.beginPath();ctx.ellipse(x+w/2,y+h/3,w/3.5,h/6,0,0,Math.PI*2);ctx.fill(); ctx.fillStyle=st.ac; ctx.beginPath();ctx.arc(x+w/2,y+9,5,0,Math.PI*2);ctx.fill(); }
+    else if (ct===4){ fillRR(x+4,y+3,w-8,h-6,2,st.ac); ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; for(let cx2=x+9;cx2<x+w-8;cx2+=5){ctx.beginPath();ctx.moveTo(cx2,y+4);ctx.lineTo(cx2,y+h-5);ctx.stroke();} }
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#0d0d0d';
+    [[x+5,y-2],[x+w-15,y-2],[x+5,y+h-4],[x+w-15,y+h-4]].forEach(([wx,wy])=>ctx.fillRect(wx,wy,10,5));
+    ctx.strokeStyle=isSelected?C.CAR_GLOW:'rgba(0,0,0,0.55)'; ctx.lineWidth=isSelected?2:1.5;
+    rr(x,y,w,h,4); ctx.stroke(); ctx.shadowBlur=0;
+    txt(label,x+w/2+1,y+h/2+7,16,'rgba(0,0,0,0.7)','center','bold');
+    txt(label,x+w/2,  y+h/2+6,16,'#ffffff',        'center','bold');
 }
 
-function loop() {
-    const w = canvas.width;
-    const h = canvas.height;
+// ──────────────────────── LOCO BUTTON ──────────────────────────
 
-    // Clear
-    ctx.fillStyle = CONFIG.COLORS.BG;
-    ctx.fillRect(0, 0, w, h);
+function drawLocoButton(x,y,w,h,isActive){
+    const lo=isActive?C.LOCO_RED:C.LOCO_GREY, hi=isActive?C.LOCO_RED2:C.LOCO_GREY2;
+    const grad=ctx.createLinearGradient(x,y,x,y+h); grad.addColorStop(0,hi); grad.addColorStop(1,lo);
+    if(isActive){ctx.shadowBlur=10;ctx.shadowColor=C.LOCO_RED2;}
+    ctx.fillStyle=grad; rr(x,y,w,h,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fillRect(x+2,y+2,w-4,h/2-2);
+    strokeRR(x,y,w,h,7,isActive?'rgba(255,100,100,0.4)':'rgba(255,255,255,0.1)');
+    const cy=y+h/2;
+    ctx.fillStyle='rgba(255,255,255,'+(isActive?'0.95':'0.55')+')';
+    if(isActive){
+        ctx.fillRect(x+6,cy-8,26,13); ctx.fillRect(x+26,cy-13,12,10); ctx.fillRect(x+14,cy-15,5,7);
+        ctx.fillStyle='rgba(255,255,255,0.7)';
+        ctx.beginPath();ctx.arc(x+11,cy+6,4,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(x+28,cy+6,4,0,Math.PI*2);ctx.fill();
+    } else {
+        ctx.beginPath(); ctx.moveTo(x+w/2-6,cy-7); ctx.lineTo(x+w/2+8,cy); ctx.lineTo(x+w/2-6,cy+7); ctx.closePath(); ctx.fill();
+    }
+}
 
-    game.updateTimer();
+// ─────────────────── CLEARANCE / LIMIT MARKER ──────────────────
+// Small indicator at the track entrance — marks the clearance point.
+// Pulses green when this track is a valid move target.
+function drawClearanceMarker(trackX, trackTopY, isTarget) {
+    const mW  = 6;                             // narrow post width
+    const mH  = Math.round(CONFIG.CAR_HEIGHT * 0.55);  // ~22px — noticeably shorter than a car
+    const mX  = trackX - Math.ceil(mW / 2);   // centered on track entrance edge
+    const mY  = trackTopY + (CONFIG.CAR_HEIGHT - mH) / 2;  // vertically centred on track
 
-    if (game.state === "MENU") {
-        ctx.fillStyle = CONFIG.COLORS.MENU_BG;
-        ctx.fillRect(0, 0, w, h);
-
-        // --- Header (Fixed) ---
-        drawTrainIcon(w / 2 - 30, 80);
-        drawText("PATIO DE TRENES", w / 2, 160, 48, "#464664", "center");
-        if (game.playerName) {
-            drawText(`Hola, ${game.playerName}`, w / 2, 200, 20, "#323296", "center");
-        }
-        drawText("Selecciona un Nivel", w / 2, 230, 24, "#646478", "center");
-
-        drawButton(w - 100, 20, 80, 40, "Salir", "#C83232");
-
-        // --- Grid (Scrollable with Clipping) ---
-        const layout = getMenuLayout(w, h);
-        const { cols, btnW, btnH, gapX, gapY, startX, startY: baseStartY } = layout;
-        const startY = baseStartY + game.scrollY;
-
-        const sortedIds = Object.keys(game.levels).map(Number).sort((a, b) => a - b);
-
-        // Calc max scroll
-        const totalRows = Math.ceil(sortedIds.length / cols);
-        const contentH = totalRows * (btnH + gapY);
-        const availableH = h - 250;
-        game.maxScroll = Math.max(0, contentH - availableH + 50);
-
-        // Clipping Region
-        ctx.save();
+    if (isTarget) {
+        const pulse = 0.5 + 0.5 * Math.sin(animTime * 3);
+        ctx.shadowBlur   = 8 + pulse * 10;
+        ctx.shadowColor  = 'rgba(105,240,174,0.9)';
+        fillRR(mX, mY, mW, mH, 3, `rgba(105,240,174,${0.75 + 0.25*pulse})`);
+        ctx.shadowBlur   = 0;
+        // Small right-pointing chevron to the right of the marker
+        ctx.fillStyle = `rgba(105,240,174,${0.6 + 0.4*pulse})`;
+        const cy = trackTopY + CONFIG.CAR_HEIGHT / 2;
         ctx.beginPath();
-        ctx.rect(0, 250, w, h - 250);
-        ctx.clip();
+        ctx.moveTo(mX + mW + 2, cy - 5);
+        ctx.lineTo(mX + mW + 10, cy);
+        ctx.lineTo(mX + mW + 2, cy + 5);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        fillRR(mX, mY, mW, mH, 3, 'rgba(200,208,218,0.18)');
+    }
+}
 
-        sortedIds.forEach((lid, idx) => {
-            const row = Math.floor(idx / cols);
-            const col = idx % cols;
-            const x = startX + col * (btnW + gapX);
-            const y = startY + row * (btnH + gapY);
+// ─────────────────────── CANVAS BUTTON ─────────────────────────
 
-            // Optimization: Don't draw if outside viewport
-            if (y + btnH < 250 || y > h) return;
+function drawButton(x,y,w,h,label,color){
+    fillRR(x+2,y+2,w,h,7,'rgba(0,0,0,0.4)');
+    ctx.fillStyle=color; rr(x,y,w,h,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(x+2,y+2,w-4,h*0.45);
+    strokeRR(x,y,w,h,7,'rgba(255,255,255,0.15)');
+    txt(label,x+w/2,y+h/2+6,Math.floor(h*0.38),'#fff','center','700');
+}
 
-            const score = game.scores[lid];
-            const color = score ? "#3CB371" : "#4682B4";
+// ─────────────────────────── HUD ───────────────────────────────
 
-            drawButton(x, y, btnW, btnH, `Nivel ${lid}`, color);
+function drawHUD(w,h){
+    ctx.fillStyle=C.HEADER_BG; ctx.fillRect(0,0,w,62);
+    ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(0,61,w,1);
 
-            // Fix Text Overlap: Move "Nivel X" up slightly or adjust Score position
-            // drawButton draws centered text at y + h/2 + 6. We'll overwrite it or use custom drawing.
-            // Let's redraw the button background and custom text to avoid overlap.
-            drawRect(x, y, btnW, btnH, color, 4, { color: "rgba(0,0,0,0.3)", width: 2 });
-            ctx.fillStyle = "rgba(255,255,255,0.2)";
-            ctx.fillRect(x, y, btnW, btnH / 2);
+    drawButton(10,11,80,38,'← MENÚ','#37474f');
+    drawButton(100,11,105,38,'↺ REINICIAR','#2c3e50');
 
-            drawText(`Nivel ${lid}`, x + btnW / 2, y + 30, 16, CONFIG.COLORS.BTN_TEXT, "center");
+    // Undo button — only when history available and not animating
+    if (game.history.length>0 && !anim.isActive) {
+        drawButton(215,11,85,38,'↩ DESHACER',C.UNDO_BTN);
+    } else {
+        // Dimmed placeholder
+        ctx.fillStyle='rgba(74,20,140,0.3)';
+        rr(215,11,85,38,7); ctx.fill();
+        txt('↩ DESHACER',215+42,11+38/2+6,Math.floor(38*0.38),'rgba(255,255,255,0.25)','center','700');
+    }
 
-            if (score) {
-                const bestName = score.name || "Anon";
-                drawText(`${score.moves} (${bestName})`, x + btnW / 2, y + 60, 12, "#FFFFFF", "center");
-            } else {
-                drawText("-", x + btnW / 2, y + 60, 14, "#C8C8C8", "center");
-            }
-        });
+    txt(`NIVEL ${game.levelNum}`,w/2,42,22,C.TEXT,'center','700');
+    txt('TIEMPO',    w-90,24,11,C.TEXT_DIM,'right','600');
+    txt(game.getTimeStr(),w-90,50,20,C.TEXT,'right','700');
+    txt('MANIOBRAS', w-10,24,11,C.TEXT_DIM,'right','600');
+    txt(`${game.moves}`,w-10,50,20,C.TEXT,'right','700');
 
-        if (sortedIds.length === 0) {
-            drawText("Cargando niveles...", w / 2, 300, 20, "#FF0000", "center");
+    // Target bar
+    ctx.fillStyle=C.TARGET_BG; ctx.fillRect(0,62,w,40);
+    ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(0,101,w,1);
+    const miniW=Math.min(34,Math.floor((w-120)/(game.target.length*1.4))), miniH=22;
+    const gap=Math.min(12,miniW/3), totalW=game.target.length*(miniW+gap)-gap;
+    let tx=w/2-totalW/2+30;
+    txt('OBJETIVO:',12,88,13,C.TEXT_DIM,'left','600');
+    for(let i=0;i<game.target.length;i++){
+        const lbl=game.target[i], ct=lbl.charCodeAt(0)%CAR_TYPES.length, st=CAR_TYPES[ct];
+        const cg=ctx.createLinearGradient(tx,70,tx,70+miniH); cg.addColorStop(0,st.hi); cg.addColorStop(1,st.lo);
+        fillRR(tx,70,miniW,miniH,3,cg);
+        txt(lbl,tx+miniW/2,70+miniH/2+5,12,'#fff','center','700');
+        if(i<game.target.length-1) txt('›',tx+miniW+gap/2,84,13,C.TEXT_DIM,'center','400');
+        tx+=miniW+gap;
+    }
+    if (game.message){
+        fillRR(w/2-170,h-120,340,38,8,'rgba(198,40,40,0.92)');
+        txt(game.message,w/2,h-97,15,'#fff','center','700');
+    }
+}
+
+// ──────────────────────── GAME SCREEN ──────────────────────────
+
+function drawGameScreen(w,h){
+    drawHUD(w,h);
+
+    ctx.save();
+    ctx.translate(camera.x,camera.y);
+    ctx.scale(camera.zoom,camera.zoom);
+
+    const worldW=CONFIG.DEFAULT_WIDTH;
+    const trackSX=(worldW-CONFIG.TRACK_WIDTH)/2;
+    const trackSY=CONFIG.HUD_HEIGHT;
+
+    // Peine (behind everything else)
+    drawPeine(game.tracks.length, trackSX, trackSY);
+
+    for(let i=0; i<game.tracks.length; i++){
+        const ty=trackSY+i*CONFIG.TRACK_SPACING;
+        const cars=game.tracks[i].filter(c=>c!=='').length;
+        const capFull=cars>=game.capacity;
+        txt(`${cars}/${game.capacity}`,trackSX+CONFIG.TRACK_WIDTH+14,ty+26,14,capFull?C.CAPACITY_FULL:C.CAPACITY_OK,'left','600');
+
+        drawTrack(trackSX,ty+CONFIG.CAR_HEIGHT/2,CONFIG.TRACK_WIDTH);
+
+        const isValidTarget = game.state==='PLAYING' && !anim.isActive &&
+                              game.locoTrack!==-1 && game.selectedCars.size>0 && i!==game.locoTrack;
+
+        // Clearance marker at the track entrance (small limit post)
+        drawClearanceMarker(trackSX, ty, isValidTarget);
+
+        // Loco button — only drawn on the track where the loco currently sits
+        if (!anim.isLocoHidden(i) && game.locoTrack===i) {
+            drawLocoButton(trackSX-62,ty+2,52,CONFIG.CAR_HEIGHT-4,true);
         }
 
-        ctx.restore(); // End Clipping
-
-    } else if (game.state === "PLAYING" || game.state === "WON") {
-        // --- HUD / UI (Fixed Screen Coords) ---
-        drawButton(20, 20, 80, 30, "Menú", "#969696");
-        if (game.state === "PLAYING") {
-            drawButton(110, 20, 80, 30, "Reiniciar", "#646464");
-        }
-
-        drawText(`Nivel: ${game.levelNum}`, 220, 42, 20, CONFIG.COLORS.TEXT);
-        drawText(`Maniobras: ${game.moves}`, 350, 42, 20, CONFIG.COLORS.TEXT);
-        drawText(`Tiempo: ${game.getTimeStr()}`, 550, 42, 20, CONFIG.COLORS.TEXT);
-        drawText(game.description, 50, 80, 20, "#646464");
-        drawText(`Objetivo: ${game.target.join(" -> ")}`, 50, 110, 20, "#006400");
-
-        if (game.message) {
-            drawText(game.message, 650, 42, 20, "#FF0000");
-        }
-
-        // --- WORLD RENDER (Transformed) ---
-        ctx.save();
-        ctx.translate(camera.x, camera.y);
-        ctx.scale(camera.zoom, camera.zoom);
-
-        const worldW = CONFIG.DEFAULT_WIDTH;
-        const trackStartX = (worldW - CONFIG.TRACK_WIDTH) / 2;
-        const trackStartY = 150;
-
-        for (let i = 0; i < game.tracks.length; i++) {
-            const y = trackStartY + i * CONFIG.TRACK_SPACING;
-
-            // Capacity
-            const carsCount = game.tracks[i].filter(c => c !== '').length;
-            const capColor = carsCount >= game.capacity ? CONFIG.COLORS.CAPACITY_FULL : CONFIG.COLORS.TEXT;
-            drawText(`(${carsCount}/${game.capacity})`, trackStartX + 620, y + 25, 20, capColor);
-
-            drawTrack(trackStartX, y + CONFIG.CAR_HEIGHT / 2, 600);
-
-            // Loco Button
-            const btnX = trackStartX - 60;
-            const isLocoHere = (game.locoTrack === i);
-            const iconW = 50;
-            const iconH = 30;
-            const iconY = y + (CONFIG.CAR_HEIGHT - iconH) / 2;
-
-            if (isLocoHere) {
-                drawTrainIcon(btnX, iconY, CONFIG.COLORS.LOCO_BTN, 0.8);
-            } else {
-                drawRect(btnX, iconY, iconW, iconH, CONFIG.COLORS.LOCO_BTN_OFF, 4);
-                ctx.fillStyle = "#646464";
-                ctx.beginPath();
-                const cx = btnX + iconW / 2;
-                const cy = iconY + iconH / 2;
-                ctx.moveTo(cx - 6, cy - 6);
-                ctx.lineTo(cx + 6, cy);
-                ctx.lineTo(cx - 6, cy + 6);
-                ctx.fill();
-            }
-
-            // Move Here
-            if (game.state === "PLAYING" && game.locoTrack !== -1 && game.selectedCars.size > 0 && i !== game.locoTrack) {
-                drawButton(trackStartX - 180, y, 110, 40, "Mover Aquí", "#32CD32");
-            }
-
-            // Cars
-            const track = game.tracks[i];
-            for (let j = 0; j < track.length; j++) {
-                if (track[j] === '') continue;
-                const cx = trackStartX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
-                const isSelected = game.selectedCars.has(`${i},${j}`);
-                drawCar(cx, y, track[j], isSelected);
-            }
-        }
-        ctx.restore();
-
-        // --- OVERLAY UI (Fixed) ---
-        if (game.state === "PLAYING") {
-            drawButton(w / 2 - 100, h - 80, 90, 40, "Reiniciar", "#646464");
-        }
-
-        if (game.state === "WON") {
-            ctx.fillStyle = "rgba(0,0,0,0.7)";
-            ctx.fillRect(0, 0, w, h);
-
-            drawText(`¡Nivel ${game.levelNum} Completado!`, w / 2, h / 2 - 80, 48, "#32FF32", "center");
-
-            if (game.newRecord) {
-                drawText("¡NUEVO RÉCORD!", w / 2, h / 2 - 20, 24, CONFIG.COLORS.RECORD, "center");
-            }
-
-            drawText(`Maniobras: ${game.moves}`, w / 2, h / 2 + 20, 20, "#FFFFFF", "center");
-
-            drawButton(w / 2 - 100, h - 80, 90, 40, "Repetir", "#646464");
-            drawButton(w / 2 - 45, h - 140, 90, 40, "Menú", "#4682B4");
-
-            if (game.levels[game.levelNum + 1]) {
-                drawButton(w / 2 + 10, h - 80, 90, 40, "Siguiente", "#8A2BE2");
-            } else {
-                drawText("¡Juego Terminado!", w / 2, h - 60, 48, "#FFD700", "center");
-            }
+        // Cars — skip those currently being animated (they're drawn by anim.draw below)
+        const track=game.tracks[i];
+        for(let j=0;j<track.length;j++){
+            if(track[j]==='') continue;
+            if(anim.isHidden(i,j)) continue;
+            const cx=trackSX+j*(CONFIG.CAR_WIDTH+CONFIG.CAR_SPACING);
+            drawCar(cx,ty,track[j],game.selectedCars.has(`${i},${j}`));
         }
     }
 
+    // Draw animated cars + loco (in world coords, on top)
+    anim.draw(ctx);
+
+    ctx.restore();
+
+    // Bottom bar
+    if(game.state==='PLAYING'){
+        ctx.fillStyle=C.HEADER_BG; ctx.fillRect(0,h-64,w,64);
+        ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(0,h-64,w,1);
+        drawButton(w/2-110,h-52,105,40,'↺ REINICIAR','#2c3e50');
+    }
+
+    if(game.state==='WON'){
+        if(!game.winSpawned){ particles.spawnConfetti(w/2,h/3); game.winSpawned=true; }
+        particles.update();
+        drawWinScreen(w,h);
+    }
+}
+
+// ─────────────────────────── WIN SCREEN ────────────────────────
+
+function drawWinScreen(w,h){
+    ctx.fillStyle=C.WIN_OVERLAY; ctx.fillRect(0,0,w,h);
+    particles.draw(ctx);
+    const cardW=Math.min(600,w-40), cardH=winCardH(w);
+    const cardX=w/2-cardW/2, cardY=h/2-cardH/2;
+    fillRR(cardX,cardY,cardW,cardH,16,'#0f1525');
+    strokeRR(cardX,cardY,cardW,cardH,16,game.newRecord?'rgba(255,215,0,0.6)':'rgba(105,240,174,0.3)',2);
+    if(game.newRecord){
+        const glow=0.5+0.5*Math.sin(animTime*4);
+        ctx.shadowBlur=20+glow*20; ctx.shadowColor=C.GOLD;
+        strokeRR(cardX,cardY,cardW,cardH,16,'rgba(255,215,0,0.3)',1); ctx.shadowBlur=0;
+    }
+    txt(`¡NIVEL ${game.levelNum} COMPLETADO!`,w/2,cardY+46,Math.min(32,cardW*0.055),C.SUCCESS,'center','700');
+    const stars=game.scores.getStars(game.levelNum,game.target.length);
+    for(let s=0;s<3;s++) drawStar(w/2-40+s*42,cardY+78,18,s<stars);
+    if(game.newRecord){
+        fillRR(w/2-100,cardY+102,200,28,14,'rgba(255,215,0,0.12)');
+        strokeRR(w/2-100,cardY+102,200,28,14,'rgba(255,215,0,0.5)');
+        txt('★  ¡NUEVO RÉCORD!  ★',w/2,cardY+121,14,C.GOLD,'center','700');
+    }
+    txt(`MANIOBRAS: ${game.moves}   ·   TIEMPO: ${game.getTimeStr()}`,w/2,cardY+148,16,C.TEXT_DIM,'center','600');
+    const lbY=cardY+168, lbH=cardH-168-70;
+    fillRR(cardX+16,lbY,cardW-32,lbH,8,'rgba(0,0,0,0.3)');
+    txt(`PUNTAJES — NIVEL ${game.levelNum}`,w/2,lbY+20,13,C.TEXT_DIM,'center','700');
+    const board=game.scores.getLeaderboard(game.levelNum);
+    const medC=[C.GOLD,C.SILVER,C.BRONZE,C.TEXT_DIM,C.TEXT_DIM];
+    board.slice(0,5).forEach((entry,i)=>{
+        const ey=lbY+38+i*22, isMe=entry.moves===game.moves&&entry.name===game.playerName;
+        if(isMe){ctx.fillStyle='rgba(79,195,247,0.08)';ctx.fillRect(cardX+16,ey-14,cardW-32,20);}
+        txt(`${i+1}.`,cardX+30,ey,14,isMe?'#4fc3f7':medC[i],'left',isMe?'700':'600');
+        txt(entry.name,cardX+60,ey,14,isMe?'#4fc3f7':medC[i],'left',isMe?'700':'600');
+        txt(`${entry.moves} mov`,w/2+20,ey,14,isMe?'#4fc3f7':medC[i],'left',isMe?'700':'600');
+        txt(formatTime(entry.time),cardX+cardW-30,ey,14,isMe?'#4fc3f7':medC[i],'right',isMe?'700':'600');
+    });
+    if(!board.length) txt('¡Primer intento!',w/2,lbY+lbH/2+6,16,C.TEXT_DIM,'center','600');
+    const btnY=cardY+cardH-58;
+    drawButton(w/2-220,btnY,125,44,'↺ REPETIR','#37474f');
+    drawButton(w/2-60, btnY,120,44,'≡ MENÚ',   '#1a237e');
+    if(game.levels[game.levelNum+1]) drawButton(w/2+80,btnY,140,44,'SIGUIENTE →','#1b5e20');
+    else txt('🎉 ¡JUEGO COMPLETADO!',w/2+150,btnY+28,18,C.GOLD,'center','700');
+}
+
+// ─────────────────────────── MENU ──────────────────────────────
+
+function drawMenu(w,h){
+    ctx.globalAlpha=0.15; drawTrack(0,50,w); drawTrack(0,160,w); ctx.globalAlpha=1;
+    ctx.fillStyle=C.HEADER_BG; ctx.fillRect(0,0,w,200);
+    ctx.fillStyle='rgba(255,215,0,0.06)'; ctx.fillRect(0,199,w,1);
+    ctx.shadowBlur=30; ctx.shadowColor='rgba(255,215,0,0.3)';
+    txt('PATIO DE TRENES',w/2,72,Math.min(52,w*0.055),C.GOLD,'center','700');
+    ctx.shadowBlur=0;
+    txt('PUZZLE DE MANIOBRAS FERROVIARIAS',w/2,100,15,C.TEXT_DIM,'center','600');
+    if(game.playerName){
+        txt(`Jugador: ${game.playerName}`,w/2,132,18,C.TEXT,'center','600');
+        const done=game.scores.completedCount(), total=Object.keys(game.levels).length;
+        const barW=Math.min(300,w*0.55), barX=w/2-barW/2;
+        fillRR(barX,148,barW,10,5,'rgba(255,255,255,0.08)');
+        fillRR(barX,148,barW*(done/Math.max(total,1)),10,5,C.SUCCESS);
+        txt(`${done}/${total} completados`,w/2,176,13,C.TEXT_DIM,'center','600');
+    }
+    drawButton(w-200,12,188,42,'🏆 TABLA DE PUNTAJES','#1a237e');
+    const layout=getMenuLayout(w,h), {cols,btnW,btnH,gapX,gapY,startX,startY:base}=layout;
+    const startY=base+game.scrollY;
+    const ids=Object.keys(game.levels).map(Number).sort((a,b)=>a-b);
+    const totalRows=Math.ceil(ids.length/cols), contentH=totalRows*(btnH+gapY);
+    game.maxScroll=Math.max(0,contentH-(h-215)+50);
+    ctx.save(); ctx.beginPath(); ctx.rect(0,200,w,h-200); ctx.clip();
+    ids.forEach((lid,idx)=>{
+        const row=Math.floor(idx/cols), col=idx%cols;
+        const x=startX+col*(btnW+gapX), y=startY+row*(btnH+gapY);
+        if(y+btnH<200||y>h) return;
+        drawLevelCard(x,y,btnW,btnH,lid,
+            game.scores.getStars(lid,game.levels[lid]?.targetSequence?.length||3),
+            game.scores.getBest(lid));
+    });
+    if(!ids.length) txt('Cargando niveles…',w/2,370,22,C.TEXT_DIM,'center','600');
+    ctx.restore();
+    if(game.maxScroll>0){
+        const prog=-game.scrollY/game.maxScroll, barH=Math.max(40,(h-200)*(h-200)/(contentH+h-200));
+        fillRR(w-7,205+prog*(h-205-barH),5,barH,3,'rgba(255,255,255,0.15)');
+    }
+}
+
+function drawLevelCard(x,y,w,h,lid,stars,best){
+    fillRR(x+2,y+3,w,h,9,'rgba(0,0,0,0.35)');
+    fillRR(x,y,w,h,9,C.CARD);
+    ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(x+2,y+2,w-4,h*0.45);
+    const borderC=[C.LOCO_GREY,'#6d4c41','#607d8b',C.GOLD];
+    if(ctx.roundRect){ctx.fillStyle=borderC[stars];ctx.beginPath();ctx.roundRect(x,y,4,h,[9,0,0,9]);ctx.fill();}
+    else{ctx.fillStyle=borderC[stars];ctx.fillRect(x,y,4,h);}
+    txt('NIVEL',x+w/2,y+20,Math.min(10,w*0.08),C.TEXT_DIM,'center','600');
+    txt(`${lid}`,x+w/2,y+44,Math.min(26,w*0.2),stars>0?C.TEXT:C.TEXT_DIM,'center','700');
+    const sr=Math.min(7,w*0.055), sp=sr*2.2, sx=x+w/2-sp;
+    for(let s=0;s<3;s++) drawStar(sx+s*sp,y+h-26,sr,s<stars);
+    if(best) txt(`${best.moves}m`,x+w/2,y+h-8,Math.min(11,w*0.085),C.TEXT_DIM,'center','600');
+    strokeRR(x,y,w,h,9,'rgba(255,255,255,0.06)');
+}
+
+// ─────────────────────── LEADERBOARD ───────────────────────────
+
+function drawLeaderboard(w,h){
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,w,74);
+    txt('TABLA DE PUNTAJES',w/2,50,Math.min(38,w*0.045),C.GOLD,'center','700');
+    drawButton(20,16,130,42,'← VOLVER','#37474f');
+    const ids=Object.keys(game.levels).map(Number).sort((a,b)=>a-b).filter(id=>game.scores.isCompleted(id));
+    if(!ids.length){ txt('Aún no has completado ningún nivel.',w/2,h/2,22,C.TEXT_DIM,'center','600'); return; }
+    const rowH=68, totalH=ids.length*rowH;
+    game.lbMaxScroll=Math.max(0,totalH-(h-80)+20);
+    ctx.save(); ctx.beginPath(); ctx.rect(0,74,w,h-74); ctx.clip();
+    const baseY=80+game.lbScrollY;
+    ids.forEach((lid,idx)=>{
+        const y=baseY+idx*rowH; if(y+rowH<74||y>h) return;
+        const carCount=game.levels[lid]?.targetSequence?.length||3;
+        const stars=game.scores.getStars(lid,carCount), board=game.scores.getLeaderboard(lid);
+        ctx.fillStyle=idx%2===0?'rgba(255,255,255,0.025)':'transparent'; ctx.fillRect(0,y,w,rowH);
+        fillRR(16,y+10,58,48,6,'rgba(255,255,255,0.05)');
+        txt('NIV',45,y+28,10,C.TEXT_DIM,'center','600'); txt(`${lid}`,45,y+50,20,C.TEXT,'center','700');
+        for(let s=0;s<3;s++) drawStar(90+s*18,y+34,7,s<stars);
+        const medC=[C.GOLD,C.SILVER,C.BRONZE];
+        board.slice(0,3).forEach((e,i)=>{
+            const ex=145+i*Math.min(190,(w-145)/3);
+            fillRR(ex,y+14,Math.min(175,(w-155)/3),40,6,'rgba(255,255,255,0.04)');
+            txt(`${i+1}. ${e.name}`,ex+8,y+32,13,medC[i],'left','700');
+            txt(`${e.moves} mov  ·  ${formatTime(e.time)}`,ex+8,y+50,12,C.TEXT_DIM,'left','600');
+        });
+        ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(0,y+rowH-1); ctx.lineTo(w,y+rowH-1); ctx.stroke();
+    });
+    ctx.restore();
+    if(game.lbMaxScroll>0){
+        const prog=-game.lbScrollY/game.lbMaxScroll, bH=Math.max(40,(h-74)*(h-74)/(totalH+h-74));
+        fillRR(w-7,78+prog*(h-74-bH),5,bH,3,'rgba(255,255,255,0.15)');
+    }
+}
+
+// ─────────────────────────── MAIN LOOP ─────────────────────────
+
+let lastTs=0;
+function loop(ts){
+    const dt=Math.min((ts-lastTs)/1000,0.05); lastTs=ts; animTime+=dt;
+    game.updateTimer();
+    anim.update(dt);
+    const w=canvas.width, h=canvas.height;
+    drawBackground(w,h);
+    if      (game.state==='MENU')        drawMenu(w,h);
+    else if (game.state==='LEADERBOARD') drawLeaderboard(w,h);
+    else                                 drawGameScreen(w,h);
     requestAnimationFrame(loop);
 }
-
-// Start
-loop();
+requestAnimationFrame(loop);
