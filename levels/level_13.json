@@ -1,12 +1,48 @@
 {
   "id": 13,
   "tracks": [
-    ["E", "", "", "", "", ""],
-    ["B", "D", "", "", "", ""],
-    ["C", "A", "", "", "", ""],
-    ["F", "", "", "", "", ""]
+    [
+      "E",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "D",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "A",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "F",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
   ],
-  "targetSequence": ["A", "B", "C", "D", "E", "F"],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
   "description": "Nivel 13: Medio. Todos los vagones en vías ocupadas.",
-  "capacity": 6
+  "capacity": 6,
+  "minMoves": 6
 }

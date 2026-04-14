@@ -1,11 +1,40 @@
 {
   "id": 9,
   "tracks": [
-    ["", "", "", "", "", ""],
-    ["C", "F", "B", "", "", ""],
-    ["D", "A", "E", "", "", ""]
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "F",
+      "B",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "A",
+      "E",
+      "",
+      "",
+      ""
+    ]
   ],
-  "targetSequence": ["A", "B", "C", "D", "E", "F"],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
   "description": "Nivel 9: Medio-Fácil. Seis vagones, tres vías.",
-  "capacity": 6
+  "capacity": 6,
+  "minMoves": 7
 }

@@ -1,11 +1,37 @@
 {
   "id": 3,
   "tracks": [
-    ["", "", "", "", "", ""],
-    ["B", "", "", "", "", ""],
-    ["C", "A", "", "", "", ""]
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "A",
+      "",
+      "",
+      "",
+      ""
+    ]
   ],
-  "targetSequence": ["A", "B", "C"],
+  "targetSequence": [
+    "A",
+    "B",
+    "C"
+  ],
   "description": "Nivel 3: Tutorial. Reagrupa los vagones dispersos.",
-  "capacity": 6
+  "capacity": 6,
+  "minMoves": 4
 }

@@ -1,6 +1,6 @@
 // js/renderer.js — Canvas setup, camera, and all drawing functions
 
-import { CONFIG, C, CAR_TYPES, particles, anim, game } from './state.js';
+import { CONFIG, C, CAR_TYPES, getCarDims, particles, anim, game } from './state.js';
 
 // ─────────────────────────── CANVAS ────────────────────────────
 
@@ -256,8 +256,8 @@ function drawPeine(trackCount, trackSX, trackSY) {
 
 // ────────────────────────── CAR ────────────────────────────────
 
-export function drawCar(x, y, label, isSelected) {
-    const w  = CONFIG.CAR_WIDTH, h = CONFIG.CAR_HEIGHT;
+export function drawCar(x, y, label, isSelected, carW = CONFIG.CAR_WIDTH) {
+    const w  = carW, h = CONFIG.CAR_HEIGHT;
     const ct = label.charCodeAt(0) % CAR_TYPES.length;
     const st = CAR_TYPES[ct];
 
@@ -576,13 +576,109 @@ function drawHUD(w, h) {
 function drawAnimCars() {
     const state = anim.getAnimState();
     if (!state) return;
+    const { w: carW } = getCarDims(game.capacity);
     // Draw animated cars first (behind loco)
     for (const { label, pos } of state.cars) {
-        drawCar(pos.x, pos.y, label, false);
+        drawCar(pos.x, pos.y, label, false, carW);
     }
     if (state.locoPos) {
         drawLocoButton(state.locoPos.x, state.locoPos.y, 52, CONFIG.CAR_HEIGHT - 4, true, !anim.isRight);
     }
+}
+
+// ──────────────────────── TUTORIAL ─────────────────────────────
+
+function drawTutorialHighlight(x, y, bw, bh) {
+    const pulse = 0.5 + 0.5 * Math.sin(animTime * 4);
+    ctx.shadowBlur  = 10 + pulse * 15;
+    ctx.shadowColor = 'rgba(105,240,174,0.9)';
+    strokeRR(x-4, y-4, bw+8, bh+8, 6, `rgba(105,240,174,${0.6 + 0.4*pulse})`, 2);
+    ctx.shadowBlur = 0;
+}
+
+function drawTutorialModal(w, h) {
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Highlight objective bar in step 1
+    if (game.tutModal === 1) {
+        drawTutorialHighlight(0, 62, w, 40);
+    }
+
+    const cardW = Math.min(500, w - 40);
+    const cardH = 255;
+    const cardX = w / 2 - cardW / 2;
+    const cardY = h / 2 - cardH / 2;
+
+    fillRR(cardX, cardY, cardW, cardH, 16, '#0f1525');
+    strokeRR(cardX, cardY, cardW, cardH, 16, 'rgba(105,240,174,0.45)', 2);
+
+    if (game.tutModal === 0) {
+        txt('¡BIENVENIDO!',               w/2, cardY + 50,  26, C.SUCCESS,  'center', '700');
+        txt('Patio de Trenes es un puzzle de maniobras ferroviarias.', w/2, cardY + 100, 14, C.TEXT,    'center', '600');
+        txt('Tu misión: ordenar los vagones en la secuencia correcta.', w/2, cardY + 124, 14, C.TEXT,   'center', '600');
+        drawButton(w/2 - 90, cardY + cardH - 70, 180, 44, 'SIGUIENTE →', '#1b5e20');
+    } else {
+        txt('EL OBJETIVO',                w/2, cardY + 50,  26, C.SUCCESS,  'center', '700');
+        txt('La barra superior muestra el orden requerido de vagones.', w/2, cardY + 100, 14, C.TEXT,    'center', '600');
+        txt('Lográ que una vía tenga exactamente esa secuencia.', w/2, cardY + 124, 14, C.TEXT,   'center', '600');
+        drawButton(w/2 - 90, cardY + cardH - 70, 180, 44, '¡ENTENDIDO! →', '#1b5e20');
+    }
+
+    txt('Saltar tutorial', w/2, cardY + cardH - 14, 12, C.TEXT_DIM, 'center', '400');
+}
+
+const HINT_TEXTS = [
+    'Colocá la locomotora en la vía que tiene el vagón A',
+    '¡Bien! Ahora hacé clic en el vagón A para seleccionarlo',
+    '¡Perfecto! Hacé clic en otra vía para mover el vagón',
+];
+
+function drawTutorialHint(w, h) {
+    const trackSX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2;
+    const trackSY = CONFIG.HUD_HEIGHT;
+    const hintIdx = game.tutModal - 2; // 0, 1, or 2
+
+    // Highlights
+    if (game.tutModal === 2) {
+        const tA = game.tracks.findIndex(t => t.some(c => c === 'A'));
+        if (tA >= 0) {
+            const tyA = trackSY + tA * CONFIG.TRACK_SPACING;
+            drawTutorialHighlight(trackSX - 62, tyA + 2, 52, CONFIG.CAR_HEIGHT - 4);
+        }
+    } else if (game.tutModal === 3) {
+        const tA = game.locoTrack;
+        if (tA >= 0) {
+            const colA = game.tracks[tA].indexOf('A');
+            if (colA >= 0) {
+                const { w: cW, gap: cG } = getCarDims(game.capacity);
+                const tyA = trackSY + tA * CONFIG.TRACK_SPACING;
+                drawTutorialHighlight(trackSX + colA * (cW + cG), tyA, cW, CONFIG.CAR_HEIGHT);
+            }
+        }
+    } else if (game.tutModal === 4) {
+        for (let i = 0; i < game.tracks.length; i++) {
+            if (i === game.locoTrack) continue;
+            const ty = trackSY + i * CONFIG.TRACK_SPACING;
+            drawTutorialHighlight(trackSX - 62, ty + 2, CONFIG.TRACK_WIDTH + 62, CONFIG.CAR_HEIGHT - 4);
+        }
+    }
+
+    // Hint banner
+    const bannerW = Math.min(w - 160, 520);
+    const bannerX = w / 2 - bannerW / 2;
+    const bannerY = h - 160;
+    fillRR(bannerX, bannerY, bannerW, 50, 10, 'rgba(15,21,37,0.96)');
+    strokeRR(bannerX, bannerY, bannerW, 50, 10, 'rgba(105,240,174,0.5)', 1.5);
+    txt('💡 ' + HINT_TEXTS[hintIdx], w / 2 - 55, bannerY + 31, 14, C.TEXT, 'center', '600');
+
+    drawButton(w - 130, bannerY + 3, 110, 44, 'SALTAR', '#37474f');
+}
+
+function drawTutorial(w, h) {
+    if (game.tutModal === 0 || game.tutModal === 1) drawTutorialModal(w, h);
+    else drawTutorialHint(w, h);
 }
 
 // ──────────────────────── GAME SCREEN ──────────────────────────
@@ -624,13 +720,14 @@ export function drawGameScreen(w, h) {
             drawLocoButton(trackSX + CONFIG.TRACK_WIDTH + 10, ty + 2, 52, CONFIG.CAR_HEIGHT - 4, true, false);
         }
 
+        const { w: carW, gap: carGap } = getCarDims(game.capacity);
         const track = game.tracks[i];
         for (let j = 0; j < track.length; j++) {
             if (track[j] === '') continue;
             if (anim.isHidden(i, j)) continue;
-            const cx = trackSX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
+            const cx = trackSX + j * (carW + carGap);
             drawCar(cx, ty, track[j],
-                game.selectedCars.has(`${i},${j}`) || game.rightSelectedCars.has(`${i},${j}`));
+                game.selectedCars.has(`${i},${j}`) || game.rightSelectedCars.has(`${i},${j}`), carW);
         }
     }
 
@@ -647,6 +744,8 @@ export function drawGameScreen(w, h) {
         particles.update();
         drawWinScreen(w, h);
     }
+
+    if (game.tutModal >= 0 && game.state !== 'WON') drawTutorial(w, h);
 }
 
 // ─────────────────────────── WIN SCREEN ────────────────────────
@@ -667,15 +766,19 @@ export function drawWinScreen(w, h) {
     }
     txt(`¡NIVEL ${game.levelNum} COMPLETADO!`, w/2, cardY+46,
         Math.min(32, cardW*0.055), C.SUCCESS, 'center', '700');
-    const stars = game.scores.getStars(game.levelNum, game.target.length);
+    const stars = game.scores.getStars(game.levelNum, game.minMoves, game.target.length);
     for (let s = 0; s < 3; s++) drawStar(w/2-40+s*42, cardY+78, 18, s < stars);
     if (game.newRecord) {
         fillRR(w/2-100, cardY+102, 200, 28, 14, 'rgba(255,215,0,0.12)');
         strokeRR(w/2-100, cardY+102, 200, 28, 14, 'rgba(255,215,0,0.5)');
         txt('★  ¡NUEVO RÉCORD!  ★', w/2, cardY+121, 14, C.GOLD, 'center', '700');
     }
-    txt(`MANIOBRAS: ${game.moves}   ·   TIEMPO: ${game.getTimeStr()}`,
-        w/2, cardY+148, 16, C.TEXT_DIM, 'center', '600');
+    const minHint  = game.minMoves != null ? ` (óptimo: ${game.minMoves})` : '';
+    const myEntry  = game.scores.getLeaderboard(game.levelNum)
+                         .find(e => e.uid === game.scores.lastUid);
+    const scoreStr = myEntry?.score != null ? `   ·   ${myEntry.score} pts` : '';
+    txt(`MANIOBRAS: ${game.moves}${minHint}   ·   TIEMPO: ${game.getTimeStr()}${scoreStr}`,
+        w/2, cardY+148, Math.min(14, cardW * 0.023), C.TEXT_DIM, 'center', '600');
     const lbY = cardY+168, lbH = cardH - 168 - 70;
     fillRR(cardX+16, lbY, cardW-32, lbH, 8, 'rgba(0,0,0,0.3)');
     txt(`PUNTAJES — NIVEL ${game.levelNum}`, w/2, lbY+20, 13, C.TEXT_DIM, 'center', '700');
@@ -686,10 +789,12 @@ export function drawWinScreen(w, h) {
         // Item 3: use uid for reliable "isMe" identification
         const isMe = !!(game.scores.lastUid && entry.uid === game.scores.lastUid);
         if (isMe) { ctx.fillStyle = 'rgba(79,195,247,0.08)'; ctx.fillRect(cardX+16, ey-14, cardW-32, 20); }
-        txt(`${i+1}.`,        cardX+30,         ey, 14, isMe ? '#4fc3f7' : medC[i], 'left',  isMe ? '700' : '600');
-        txt(entry.name,       cardX+60,         ey, 14, isMe ? '#4fc3f7' : medC[i], 'left',  isMe ? '700' : '600');
-        txt(`${entry.moves} mov`, w/2+20,        ey, 14, isMe ? '#4fc3f7' : medC[i], 'left',  isMe ? '700' : '600');
-        txt(formatTime(entry.time), cardX+cardW-30, ey, 14, isMe ? '#4fc3f7' : medC[i], 'right', isMe ? '700' : '600');
+        const ec = isMe ? '#4fc3f7' : medC[i], ew = isMe ? '700' : '600';
+        txt(`${i+1}.`,        cardX+30,  ey, 14, ec, 'left',  ew);
+        txt(entry.name,       cardX+60,  ey, 14, ec, 'left',  ew);
+        if (entry.score != null)
+            txt(`${entry.score} pts`, w/2, ey, 13, ec, 'center', ew);
+        txt(`${entry.moves}m · ${formatTime(entry.time)}`, cardX+cardW-30, ey, 12, ec, 'right', ew);
     });
     if (!board.length) txt('¡Primer intento!', w/2, lbY+lbH/2+6, 16, C.TEXT_DIM, 'center', '600');
     const btnY = cardY + cardH - 58;
@@ -733,7 +838,7 @@ export function drawMenu(w, h) {
         const x = startX + col * (btnW + gapX), y = startY + row * (btnH + gapY);
         if (y + btnH < 200 || y > h) return;
         drawLevelCard(x, y, btnW, btnH, lid,
-            game.scores.getStars(lid, game.levels[lid]?.targetSequence?.length || 3),
+            game.scores.getStars(lid, game.levels[lid]?.minMoves ?? null, game.levels[lid]?.targetSequence?.length || 3),
             game.scores.getBest(lid));
     });
     if (!ids.length) txt('Cargando niveles…', w/2, 370, 22, C.TEXT_DIM, 'center', '600');
@@ -759,7 +864,7 @@ function drawLevelCard(x, y, w, h, lid, stars, best) {
     txt(`${lid}`, x+w/2, y+44,  Math.min(26, w*0.2),  stars > 0 ? C.TEXT : C.TEXT_DIM, 'center', '700');
     const sr = Math.min(7, w*0.055), sp = sr*2.2, sx = x + w/2 - sp;
     for (let s = 0; s < 3; s++) drawStar(sx + s*sp, y+h-26, sr, s < stars);
-    if (best) txt(`${best.moves}m`, x+w/2, y+h-8, Math.min(11, w*0.085), C.TEXT_DIM, 'center', '600');
+    if (best) txt(best.score != null ? `${best.score}pts` : `${best.moves}m`, x+w/2, y+h-8, Math.min(11, w*0.085), C.TEXT_DIM, 'center', '600');
     strokeRR(x, y, w, h, 9, 'rgba(255,255,255,0.06)');
 }
 
@@ -769,6 +874,9 @@ export function drawLeaderboard(w, h) {
     ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, w, 74);
     txt('TABLA DE PUNTAJES', w/2, 50, Math.min(38, w*0.045), C.GOLD, 'center', '700');
     drawButton(20, 16, 130, 42, '← VOLVER', '#37474f');
+    if (game.globalLbLoading) {
+        txt('Cargando ranking global…', w-20, 54, 12, C.TEXT_DIM, 'right', '600');
+    }
     const ids = Object.keys(game.levels).map(Number).sort((a, b) => a - b)
                     .filter(id => game.scores.isCompleted(id));
     if (!ids.length) { txt('Aún no has completado ningún nivel.', w/2, h/2, 22, C.TEXT_DIM, 'center', '600'); return; }
@@ -779,19 +887,24 @@ export function drawLeaderboard(w, h) {
     ids.forEach((lid, idx) => {
         const y = baseY + idx * rowH; if (y + rowH < 74 || y > h) return;
         const carCount = game.levels[lid]?.targetSequence?.length || 3;
-        const stars = game.scores.getStars(lid, carCount), board = game.scores.getLeaderboard(lid);
+        const stars    = game.scores.getStars(lid, game.levels[lid]?.minMoves ?? null, carCount);
+        const globalBoard = game.globalLeaderboard[lid];
+        const board       = globalBoard || game.scores.getLeaderboard(lid);
+        const isGlobal    = !!globalBoard;
         ctx.fillStyle = idx % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'transparent';
         ctx.fillRect(0, y, w, rowH);
         fillRR(16, y+10, 58, 48, 6, 'rgba(255,255,255,0.05)');
         txt('NIV', 45, y+28, 10, C.TEXT_DIM, 'center', '600');
         txt(`${lid}`, 45, y+50, 20, C.TEXT, 'center', '700');
         for (let s = 0; s < 3; s++) drawStar(90 + s*18, y+34, 7, s < stars);
+        txt(isGlobal ? 'GLOBAL' : 'LOCAL', 90, y+54, 8, isGlobal ? C.SUCCESS : C.TEXT_DIM, 'center', '600');
         const medC = [C.GOLD, C.SILVER, C.BRONZE];
         board.slice(0, 3).forEach((e, i) => {
             const ex = 145 + i * Math.min(190, (w-145) / 3);
             fillRR(ex, y+14, Math.min(175, (w-155)/3), 40, 6, 'rgba(255,255,255,0.04)');
             txt(`${i+1}. ${e.name}`, ex+8, y+32, 13, medC[i], 'left', '700');
-            txt(`${e.moves} mov  ·  ${formatTime(e.time)}`, ex+8, y+50, 12, C.TEXT_DIM, 'left', '600');
+            const scoreLabel = e.score != null ? `${e.score}pts  ·  ` : '';
+            txt(`${scoreLabel}${e.moves}m  ·  ${formatTime(e.time)}`, ex+8, y+50, 12, C.TEXT_DIM, 'left', '600');
         });
         ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(0, y+rowH-1); ctx.lineTo(w, y+rowH-1); ctx.stroke();

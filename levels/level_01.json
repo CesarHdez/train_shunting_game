@@ -1,11 +1,36 @@
 {
   "id": 1,
   "tracks": [
-    ["", "", "", "", "", ""],
-    ["B", "", "", "", "", ""],
-    ["A", "", "", "", "", ""]
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "A",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
   ],
-  "targetSequence": ["A", "B"],
+  "targetSequence": [
+    "A",
+    "B"
+  ],
   "description": "Nivel 1: Tutorial. Coloca A antes que B.",
-  "capacity": 6
+  "capacity": 6,
+  "minMoves": 1
 }

@@ -1,5 +1,7 @@
 // js/state.js — Game constants, logic, and data classes
 
+import { submitScore, fetchGlobalLeaderboard } from './firebase.js';
+
 // ─────────────────────────── CONFIG ────────────────────────────
 
 export const CONFIG = {
@@ -13,6 +15,16 @@ export const CONFIG = {
     HUD_HEIGHT:     100,
     PEINE_X:        30,
 };
+
+// Returns effective car width and gap so all cars fit within TRACK_WIDTH.
+// When capacity is small enough, defaults are used unchanged.
+export function getCarDims(capacity) {
+    const gap  = CONFIG.CAR_SPACING;
+    const maxW = CONFIG.CAR_WIDTH;
+    if (capacity <= 0) return { w: maxW, gap };
+    const fitW = Math.floor((CONFIG.TRACK_WIDTH - (capacity - 1) * gap) / capacity);
+    return { w: Math.min(maxW, fitW), gap };
+}
 
 export const C = {
     BG_TOP:        '#0d1117',  BG_BOT:     '#1a1f2e',
@@ -206,6 +218,23 @@ function _hashEntry(e) {
     return (h >>> 0).toString(36);
 }
 
+// Puntaje: maniobras es primario (0-1000), tiempo es secundario (0-200).
+// Si se conoce minMoves, el puntaje de maniobras es exacto; si no, usa el sistema de estrellas.
+function computeScore(moves, time, minMoves, carCount) {
+    let moveScore;
+    if (minMoves != null && minMoves > 0 && moves > 0) {
+        moveScore = Math.round(1000 * Math.pow(Math.min(1, minMoves / moves), 2));
+    } else if (minMoves === 0 && moves === 0) {
+        moveScore = 1000;
+    } else {
+        // Fallback: mapear estrellas a puntaje
+        const n = Math.max(carCount || 2, 2);
+        moveScore = moves <= n + 1 ? 1000 : moves <= n * 2 + 1 ? 600 : 200;
+    }
+    const timeBonus = Math.max(0, 200 - time); // máx 200 pts, decrece 1 pt/segundo
+    return moveScore + timeBonus;
+}
+
 export class ScoreManager {
     constructor() { this.data = {}; this.lastUid = null; this.load(); }
 
@@ -252,17 +281,19 @@ export class ScoreManager {
 
     save() { localStorage.setItem('train_scores_v2', JSON.stringify(this.data)); }
 
-    addScore(levelId, moves, time, name) {
-        const lid = String(levelId);
+    addScore(levelId, moves, time, name, minMoves = null, carCount = 2) {
+        const lid   = String(levelId);
         if (!this.data[lid]) this.data[lid] = [];
         const uid   = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-        const entry = { moves, time, name, date: new Date().toLocaleDateString('es'), uid };
-        entry._h    = _hashEntry(entry);
+        const score = computeScore(moves, time, minMoves, carCount);
+        const entry = { moves, time, score, name, date: new Date().toLocaleDateString('es'), uid };
+        entry._h    = _hashEntry(entry); // hash no incluye score (campo derivado)
         this.data[lid].push(entry);
-        this.data[lid].sort((a, b) => a.moves - b.moves || a.time - b.time);
+        this.data[lid].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); // mayor puntaje primero
         this.data[lid] = this.data[lid].slice(0, 5);
         this.save();
         this.lastUid = uid;
+        submitScore(levelId, entry); // fire-and-forget — no await
         return this.data[lid].findIndex(e => e.uid === uid) + 1;
     }
 
@@ -270,9 +301,15 @@ export class ScoreManager {
     getLeaderboard(levelId) { return this.data[String(levelId)] || []; }
     isCompleted(levelId)    { return (this.data[String(levelId)]?.length || 0) > 0; }
 
-    getStars(levelId, carCount) {
+    getStars(levelId, minMoves, carCount) {
         const best = this.getBest(levelId); if (!best) return 0;
-        const n = Math.max(carCount, 2);
+        if (minMoves != null) {
+            if (best.moves <= minMoves)                       return 3;
+            if (best.moves <= Math.ceil(minMoves * 1.5))      return 2;
+            return 1;
+        }
+        // Fallback cuando minMoves no está disponible
+        const n = Math.max(carCount || 2, 2);
         if (best.moves <= n+1)   return 3;
         if (best.moves <= n*2+1) return 2;
         return 1;
@@ -319,6 +356,13 @@ export class GameState {
         this.lbScrollY    = 0;  this.lbScrollVel = 0;  this.lbMaxScroll = 0;
         this.winSpawned   = false;
         this._dirty       = false; // signals renderer to redraw (e.g. levels loaded)
+
+        // Tutorial: -1=off, 0=welcome modal, 1=objective modal,
+        //           2=hint:place loco, 3=hint:select car, 4=hint:move
+        this.tutModal     = -1;
+
+        this.globalLeaderboard  = {}; // levelId -> [{name, moves, time, date}]
+        this.globalLbLoading    = false;
 
         this.loadLevels();
         this.setupLogin();
@@ -379,6 +423,7 @@ export class GameState {
         this.rightSelectedCars.clear();
         this.hasRightLoco      = !!(data.rightLoco);
         this.locoLimit         = data.locoLimit || Infinity;
+        this.minMoves     = data.minMoves ?? null;
         this.moves        = 0;
         this.startTime    = Date.now();
         this.elapsedTime  = 0;
@@ -391,6 +436,20 @@ export class GameState {
         this.history      = [];
         particles.p.length = 0;
         this.state = 'PLAYING';
+
+        if (num === 1 && !localStorage.getItem('train_tutorial_done')) {
+            this.tutModal = 0;
+        }
+    }
+
+    advanceTutModal() {
+        // 0→1→2 (caps at 2; steps 3/4 are advanced directly in main.js)
+        this.tutModal = Math.min(this.tutModal + 1, 2);
+    }
+
+    skipTutorial() {
+        this.tutModal = -1;
+        localStorage.setItem('train_tutorial_done', '1');
     }
 
     pushHistory() {
@@ -447,16 +506,58 @@ export class GameState {
     }
 
     handleScore() {
-        const rank = this.scores.addScore(this.levelNum, this.moves, this.elapsedTime, this.playerName);
+        const rank = this.scores.addScore(
+            this.levelNum, this.moves, this.elapsedTime, this.playerName,
+            this.minMoves, this.target.length
+        );
         this.lastRank  = rank;
         this.newRecord = (rank === 1);
+        // Invalidate cached global data for this level so next leaderboard visit re-fetches
+        delete this.globalLeaderboard[this.levelNum];
+    }
+
+    async loadGlobalLeaderboard() {
+        if (this.globalLbLoading) return;
+        this.globalLbLoading = true;
+        this._dirty = true;
+        const ids = Object.keys(this.levels).map(Number)
+                         .filter(id => this.scores.isCompleted(id));
+        await Promise.allSettled(ids.map(async id => {
+            const entries = await fetchGlobalLeaderboard(id, 5);
+            if (entries.length) this.globalLeaderboard[id] = entries;
+        }));
+        this.globalLbLoading = false;
+        this._dirty = true;
     }
 
     positionLocomotive(trackIdx) {
         if (this.won || anim.isActive) return;
+        // Block if right loco already occupies this track
+        if (this.hasRightLoco && this.rightLocoTrack === trackIdx) return;
         const isFirst = (this.locoTrack === -1);
         const isSame  = (this.locoTrack === trackIdx);
-        if (!isFirst && !isSame) { this.pushHistory(); this.moves++; }
+
+        if (!isFirst && !isSame) {
+            this.pushHistory(); this.moves++;
+            const trackSX   = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2;
+            const trackSY   = CONFIG.HUD_HEIGHT;
+            const srcY      = trackSY + this.locoTrack * CONFIG.TRACK_SPACING;
+            const dstY      = trackSY + trackIdx       * CONFIG.TRACK_SPACING;
+            const dist      = Math.abs(trackIdx - this.locoTrack) / Math.max(this.tracks.length - 1, 1);
+            const locoX     = trackSX - 62;
+            const prevTrack = this.locoTrack;
+            this.locoTrack  = trackIdx;
+            this.selectedCars.clear();
+            anim.start([], buildWaypoints(locoX, srcY, locoX, dstY), prevTrack, trackIdx, 0, dist, () => {
+                const track = this.tracks[trackIdx];
+                for (let i = 0; i < track.length; i++) {
+                    if (track[i] !== '') this.selectedCars.add(`${trackIdx},${i}`); else break;
+                }
+            });
+            return;
+        }
+
+        // First placement or same track — instant, no cost
         this.locoTrack = trackIdx;
         this.selectedCars.clear();
         const track = this.tracks[trackIdx];
@@ -481,6 +582,12 @@ export class GameState {
         if (this.won || anim.isActive) return;
         if (this.locoTrack === -1 || this.selectedCars.size === 0) return;
         if (targetTrackIdx === this.locoTrack) return;
+        // Block moving into a track already occupied by the right loco
+        if (this.hasRightLoco && this.rightLocoTrack === targetTrackIdx) {
+            this.message = '¡Vía ocupada por la otra locomotora!';
+            this.messageTimer = 120;
+            return;
+        }
 
         const srcIdx = this.locoTrack;
         const list   = Array.from(this.selectedCars)
@@ -507,10 +614,11 @@ export class GameState {
         const srcY    = trackSY + srcIdx         * CONFIG.TRACK_SPACING;
         const dstY    = trackSY + targetTrackIdx * CONFIG.TRACK_SPACING;
         const dist    = Math.abs(targetTrackIdx - srcIdx) / Math.max(this.tracks.length - 1, 1);
+        const { w: carW, gap: carGap } = getCarDims(this.capacity);
 
         const animCars = list.map(item => {
             const label = this.tracks[srcIdx][item.c];
-            const carX  = trackSX + item.c * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
+            const carX  = trackSX + item.c * (carW + carGap);
             return { label, waypoints: buildWaypoints(carX, srcY, carX, dstY) };
         });
 
@@ -538,13 +646,36 @@ export class GameState {
 
     positionLocomotiveRight(trackIdx) {
         if (this.won || anim.isActive || !this.hasRightLoco) return;
+        // Block if left loco already occupies this track
+        if (this.locoTrack === trackIdx) return;
         const isFirst = (this.rightLocoTrack === -1);
         const isSame  = (this.rightLocoTrack === trackIdx);
-        if (!isFirst && !isSame) { this.pushHistory(); this.moves++; }
-        this.rightLocoTrack = trackIdx;
-        this.rightSelectedCars.clear();
         // Deactivate left loco — only one side active at a time
         this.locoTrack = -1; this.selectedCars.clear();
+
+        if (!isFirst && !isSame) {
+            this.pushHistory(); this.moves++;
+            const trackSX      = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2;
+            const trackSY      = CONFIG.HUD_HEIGHT;
+            const srcY         = trackSY + this.rightLocoTrack * CONFIG.TRACK_SPACING;
+            const dstY         = trackSY + trackIdx            * CONFIG.TRACK_SPACING;
+            const dist         = Math.abs(trackIdx - this.rightLocoTrack) / Math.max(this.tracks.length - 1, 1);
+            const rightLocoX   = trackSX + CONFIG.TRACK_WIDTH + 10;
+            const prevTrack    = this.rightLocoTrack;
+            this.rightLocoTrack = trackIdx;
+            this.rightSelectedCars.clear();
+            anim.start([], buildWaypointsRight(rightLocoX, srcY, rightLocoX, dstY), prevTrack, trackIdx, 0, dist, () => {
+                const track = this.tracks[trackIdx];
+                for (let i = 0; i < track.length; i++) {
+                    if (track[i] !== '') this.rightSelectedCars.add(`${trackIdx},${i}`);
+                }
+            }, true);
+            return;
+        }
+
+        // First placement or same track — instant, no cost
+        this.rightLocoTrack = trackIdx;
+        this.rightSelectedCars.clear();
         const track = this.tracks[trackIdx];
         for (let i = 0; i < track.length; i++) {
             if (track[i] !== '') this.rightSelectedCars.add(`${trackIdx},${i}`);
@@ -566,6 +697,12 @@ export class GameState {
         if (this.won || anim.isActive) return;
         if (this.rightLocoTrack === -1 || this.rightSelectedCars.size === 0) return;
         if (targetTrackIdx === this.rightLocoTrack) return;
+        // Block moving into a track already occupied by the left loco
+        if (this.locoTrack === targetTrackIdx) {
+            this.message = '¡Vía ocupada por la otra locomotora!';
+            this.messageTimer = 120;
+            return;
+        }
 
         const srcIdx = this.rightLocoTrack;
         const list   = Array.from(this.rightSelectedCars)
@@ -593,10 +730,11 @@ export class GameState {
         const dstY        = trackSY + targetTrackIdx * CONFIG.TRACK_SPACING;
         const dist        = Math.abs(targetTrackIdx - srcIdx) / Math.max(this.tracks.length - 1, 1);
         const rightLocoX  = trackSX + CONFIG.TRACK_WIDTH + 10;
+        const { w: carW, gap: carGap } = getCarDims(this.capacity);
 
         const animCars = list.map(item => {
             const label = this.tracks[srcIdx][item.c];
-            const carX  = trackSX + item.c * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
+            const carX  = trackSX + item.c * (carW + carGap);
             return { label, waypoints: buildWaypointsRight(carX, srcY, carX, dstY) };
         });
         const locoWaypoints = buildWaypointsRight(rightLocoX, srcY, rightLocoX, dstY);

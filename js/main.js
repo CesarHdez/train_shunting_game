@@ -1,6 +1,6 @@
 // js/main.js — Input handling, game loop, and startup
 
-import { CONFIG, game, anim } from './state.js';
+import { CONFIG, game, anim, getCarDims } from './state.js';
 import { canvas, camera, resize, inRect, getMenuLayout, winCardH, tickAnim, render } from './renderer.js';
 
 // ─────────────────── IDLE DETECTION (Item 10) ──────────────────
@@ -76,13 +76,86 @@ window.addEventListener('resize', () => { resize(); markDirty(); });
 
 // ───────────────────────── CLICK LOGIC ─────────────────────────
 
+function handleTutorialClick(wx, wy, w, h) {
+    const trackSX = (CONFIG.DEFAULT_WIDTH - CONFIG.TRACK_WIDTH) / 2;
+    const trackSY = CONFIG.HUD_HEIGHT;
+
+    // Modal steps (0, 1): block all clicks except NEXT and SKIP
+    if (game.tutModal <= 1) {
+        const cardW = Math.min(500, w - 40), cardH = 255;
+        const cardX = w / 2 - cardW / 2, cardY = h / 2 - cardH / 2;
+        const btnX = w / 2 - 90, btnY = cardY + cardH - 70;
+        if (inRect(wx, wy, btnX, btnY, 180, 44))           { game.advanceTutModal(); return true; }
+        if (inRect(wx, wy, w/2 - 70, btnY + 58, 140, 22)) { game.skipTutorial();    return true; }
+        return true; // block everything else
+    }
+
+    // Skip button (steps 2–4)
+    if (inRect(wx, wy, w - 130, h - 157, 110, 44)) { game.skipTutorial(); return true; }
+
+    // Step 2: only allow loco button for the track containing car A
+    if (game.tutModal === 2) {
+        const tA = game.tracks.findIndex(t => t.some(c => c === 'A'));
+        if (tA >= 0) {
+            const ty = trackSY + tA * CONFIG.TRACK_SPACING;
+            if (inRect(wx, wy, trackSX - 62, ty + 2, 52, CONFIG.CAR_HEIGHT - 4)) {
+                game.positionLocomotive(tA);
+                game.selectedCars.clear(); // reset auto-selection so step 3 teaches manual selection
+                game.tutModal = 3;
+                return true;
+            }
+        }
+        return true; // silently block
+    }
+
+    // Step 3: only allow clicking car A
+    if (game.tutModal === 3) {
+        const tA = game.locoTrack;
+        if (tA >= 0) {
+            const colA = game.tracks[tA].indexOf('A');
+            if (colA >= 0) {
+                const { w: cW, gap: cG } = getCarDims(game.capacity);
+                const ty = trackSY + tA * CONFIG.TRACK_SPACING;
+                if (inRect(wx, wy, trackSX + colA * (cW + cG), ty, cW, CONFIG.CAR_HEIGHT)) {
+                    game.selectCar(tA, colA);
+                    game.tutModal = 4;
+                    return true;
+                }
+            }
+        }
+        return true; // silently block
+    }
+
+    // Step 4: only allow moving to a valid destination track
+    if (game.tutModal === 4) {
+        for (let i = 0; i < game.tracks.length; i++) {
+            if (i === game.locoTrack) continue;
+            const ty = trackSY + i * CONFIG.TRACK_SPACING;
+            if (inRect(wx, wy, trackSX - 62, ty + 2, 52, CONFIG.CAR_HEIGHT - 4) ||
+                inRect(wx, wy, trackSX - 4, ty - 4, CONFIG.TRACK_WIDTH + 8, CONFIG.CAR_HEIGHT + 8)) {
+                game.moveSelected(i);
+                game.tutModal = -1;
+                localStorage.setItem('train_tutorial_done', '1');
+                return true;
+            }
+        }
+        return true; // silently block
+    }
+
+    return false;
+}
+
 function handleClick(mx, my) {
     const wx = (mx - camera.x) / camera.zoom, wy = (my - camera.y) / camera.zoom;
     const w  = CONFIG.DEFAULT_WIDTH, h = CONFIG.DEFAULT_HEIGHT;
     markDirty();
 
+    if (game.tutModal >= 0 && game.state === 'PLAYING') {
+        if (handleTutorialClick(wx, wy, w, h)) return;
+    }
+
     if (game.state === 'MENU') {
-        if (inRect(wx, wy, w-200, 12, 188, 42)) { game.state = 'LEADERBOARD'; game.lbScrollY = 0; return; }
+        if (inRect(wx, wy, w-200, 12, 188, 42)) { game.state = 'LEADERBOARD'; game.lbScrollY = 0; game.loadGlobalLeaderboard(); return; }
         const layout  = getMenuLayout(w, h);
         const { cols, btnW, btnH, gapX, gapY, startX, startY: base } = layout;
         const startY  = base + game.scrollY;
@@ -160,11 +233,12 @@ function handleClick(mx, my) {
             }
 
             // Car click — adjust selection for whichever loco is on this track
+            const { w: carW, gap: carGap } = getCarDims(game.capacity);
             const track = game.tracks[i];
             for (let j = 0; j < track.length; j++) {
                 if (track[j] === '') continue;
-                const cx = trackSX + j * (CONFIG.CAR_WIDTH + CONFIG.CAR_SPACING);
-                if (inRect(wx, wy, cx, ty, CONFIG.CAR_WIDTH, CONFIG.CAR_HEIGHT)) {
+                const cx = trackSX + j * (carW + carGap);
+                if (inRect(wx, wy, cx, ty, carW, CONFIG.CAR_HEIGHT)) {
                     if (game.locoTrack === i)      game.selectCar(i, j);
                     if (game.rightLocoTrack === i) game.selectCarRight(i, j);
                     return;

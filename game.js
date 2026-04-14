@@ -42,11 +42,11 @@ const C = {
 };
 
 const CAR_TYPES = [
-    { name: 'Boxcar',    lo: '#7B3F10', hi: '#A05A20', ac: '#5a2d0a' },
-    { name: 'Hopper',    lo: '#37474f', hi: '#546e7a', ac: '#263238' },
-    { name: 'Gondola',   lo: '#1b5e20', hi: '#388e3c', ac: '#0a3d0f' },
-    { name: 'Tanker',    lo: '#1a1a1a', hi: '#323232', ac: '#616161' },
-    { name: 'Container', lo: '#0d47a1', hi: '#1976d2', ac: '#42a5f5' },
+    { name: 'Boxcar',    lo: '#7a2e0a', hi: '#c04020', ac: '#4a1806', roof: '#2e1004'   },
+    { name: 'Hopper',    lo: '#1e2d42', hi: '#324e70', ac: '#121c2a', rim:  '#506080'   },
+    { name: 'Gondola',   lo: '#1a3018', hi: '#2a5028', ac: '#0e1c0c', rim:  '#487045'   },
+    { name: 'Tanker',    lo: '#262626', hi: '#545454', ac: '#909090', band: '#b00000'   },
+    { name: 'Container', lo: '#0e3060', hi: '#1858b8', ac: '#07183a', stripe:'#e8c000' },
 ];
 
 // ─────────────────────── ANIMATION HELPERS ─────────────────────
@@ -488,15 +488,17 @@ class GameState {
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 const game   = new GameState();
-const camera = { x:0, y:0, zoom:1, isDragging:false, lastX:0, lastY:0, lastPinchDist:0 };
+const camera = { x:0, y:0, zoom:1, isDragging:false, lastX:0, lastY:0 };
 let animTime = 0;
 
 function resize() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
-    camera.zoom   = canvas.width < 768 ? canvas.width/1024 : 1;
-    camera.x = (canvas.width  - CONFIG.DEFAULT_WIDTH  * camera.zoom) / 2;
-    camera.y = (canvas.height - CONFIG.DEFAULT_HEIGHT * camera.zoom) / 4;
+    const scaleX  = canvas.width  / CONFIG.DEFAULT_WIDTH;
+    const scaleY  = canvas.height / CONFIG.DEFAULT_HEIGHT;
+    camera.zoom   = Math.min(scaleX, scaleY, 1);
+    camera.x = Math.round((canvas.width  - CONFIG.DEFAULT_WIDTH  * camera.zoom) / 2);
+    camera.y = Math.round((canvas.height - CONFIG.DEFAULT_HEIGHT * camera.zoom) / 2);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -513,32 +515,27 @@ function onPointerDown(x,y) {
     camera.isDragging=true; camera.lastX=x; camera.lastY=y;
     dragMoved=false; downX=x; downY=y;
 }
-function onPointerMove(x,y,isPinch=false,dist=0) {
+function onPointerMove(x,y) {
     if (!camera.isDragging) return;
-    if (isPinch) {
-        if (camera.lastPinchDist>0) { const d=dist/camera.lastPinchDist, nz=camera.zoom*d; if(nz>0.3&&nz<3) camera.zoom=nz; }
-        camera.lastPinchDist=dist; return;
-    }
-    const dx=x-camera.lastX, dy=y-camera.lastY;
+    const dy=y-camera.lastY;
     if (Math.abs(x-downX)>5||Math.abs(y-downY)>5) dragMoved=true;
-    if (game.state==='MENU')          { game.scrollY+=dy;   game.scrollVel=dy;  }
-    else if (game.state==='LEADERBOARD'){ game.lbScrollY+=dy; game.lbScrollVel=dy; }
-    else                              { camera.x+=dx; camera.y+=dy; }
+    const wdy=dy/camera.zoom;
+    if (game.state==='MENU')           { game.scrollY  +=wdy; game.scrollVel  =wdy; }
+    else if (game.state==='LEADERBOARD'){ game.lbScrollY+=wdy; game.lbScrollVel=wdy; }
     camera.lastX=x; camera.lastY=y;
 }
 function onPointerUp(sx,sy) {
     if (!dragMoved && sx!==undefined) handleClick(sx,sy);
-    camera.isDragging=false; camera.lastPinchDist=0;
+    camera.isDragging=false;
 }
 
 canvas.addEventListener('touchstart',e=>{
     if (e.touches.length===1) { const t=e.touches[0]; onPointerDown(t.clientX,t.clientY); }
-    else if (e.touches.length===2) { camera.isDragging=true; camera.lastPinchDist=getPinchDist(e.touches[0],e.touches[1]); dragMoved=true; }
+    else { camera.isDragging=false; dragMoved=true; }
 },{passive:false});
 canvas.addEventListener('touchmove',e=>{
     e.preventDefault();
     if (e.touches.length===1) { const t=e.touches[0]; onPointerMove(t.clientX,t.clientY); }
-    else if (e.touches.length===2) onPointerMove(0,0,true,getPinchDist(e.touches[0],e.touches[1]));
 },{passive:false});
 canvas.addEventListener('touchend',e=>{
     if (e.changedTouches.length===1&&e.touches.length===0) { const t=e.changedTouches[0]; onPointerUp(t.clientX,t.clientY); }
@@ -549,18 +546,19 @@ canvas.addEventListener('mousemove',e=>{ if(e.buttons===1){const r=canvas.getBou
 canvas.addEventListener('mouseup',e=>{ const r=canvas.getBoundingClientRect(); onPointerUp(e.clientX-r.left,e.clientY-r.top); });
 canvas.addEventListener('wheel',e=>{
     e.preventDefault();
-    if (game.state==='MENU')          game.scrollY   -= e.deltaY;
-    else if (game.state==='LEADERBOARD') game.lbScrollY -= e.deltaY;
-    else { const z=camera.zoom-e.deltaY*0.001; if(z>0.3&&z<3) camera.zoom=z; }
+    const wdelta=e.deltaY/camera.zoom;
+    if (game.state==='MENU')             game.scrollY   -=wdelta;
+    else if (game.state==='LEADERBOARD') game.lbScrollY -=wdelta;
 },{passive:false});
 
 // ───────────────────────── CLICK LOGIC ─────────────────────────
 
 function handleClick(mx,my) {
-    const w=canvas.width, h=canvas.height;
+    const wx=(mx-camera.x)/camera.zoom, wy=(my-camera.y)/camera.zoom;
+    const w=CONFIG.DEFAULT_WIDTH, h=CONFIG.DEFAULT_HEIGHT;
 
     if (game.state==='MENU') {
-        if (inRect(mx,my,w-200,12,188,42)) { game.state='LEADERBOARD'; game.lbScrollY=0; return; }
+        if (inRect(wx,wy,w-200,12,188,42)) { game.state='LEADERBOARD'; game.lbScrollY=0; return; }
         const layout=getMenuLayout(w,h);
         const {cols,btnW,btnH,gapX,gapY,startX,startY:base}=layout;
         const startY=base+game.scrollY;
@@ -569,41 +567,39 @@ function handleClick(mx,my) {
             const row=Math.floor(idx/cols), col=idx%cols;
             const x=startX+col*(btnW+gapX), y=startY+row*(btnH+gapY);
             if (y+btnH<200||y>h) return;
-            if (inRect(mx,my,x,y,btnW,btnH)) game.startLevel(lid);
+            if (inRect(wx,wy,x,y,btnW,btnH)) game.startLevel(lid);
         });
         return;
     }
 
     if (game.state==='LEADERBOARD') {
-        if (inRect(mx,my,20,20,130,42)) { game.state='MENU'; return; }
+        if (inRect(wx,wy,20,20,130,42)) { game.state='MENU'; return; }
         return;
     }
 
     if (game.state==='PLAYING'||game.state==='WON') {
-        if (inRect(mx,my,10,11,80,38))  { game.state='MENU'; return; }
+        if (inRect(wx,wy,10,11,80,38))  { game.state='MENU'; return; }
 
         if (game.state==='PLAYING') {
-            if (inRect(mx,my,100,11,105,38)) { game.startLevel(game.levelNum); return; }
+            if (inRect(wx,wy,100,11,105,38)) { game.startLevel(game.levelNum); return; }
             // Undo button
             if (game.history.length>0 && !anim.isActive) {
-                if (inRect(mx,my,215,11,85,38)) { game.undo(); return; }
+                if (inRect(wx,wy,215,11,85,38)) { game.undo(); return; }
             }
             // Bottom restart
-            if (inRect(mx,my,w/2-110,h-52,105,40)) { game.startLevel(game.levelNum); return; }
+            if (inRect(wx,wy,w/2-110,h-52,105,40)) { game.startLevel(game.levelNum); return; }
         }
 
         if (game.state==='WON') {
             const cardH=winCardH(w), cardY=h/2-cardH/2, btnY=cardY+cardH-58;
-            if (inRect(mx,my,w/2-220,btnY,125,44)) { game.startLevel(game.levelNum); return; }
-            if (inRect(mx,my,w/2-60, btnY,120,44)) { game.state='MENU'; return; }
-            if (game.levels[game.levelNum+1] && inRect(mx,my,w/2+80,btnY,140,44)) {
+            if (inRect(wx,wy,w/2-220,btnY,125,44)) { game.startLevel(game.levelNum); return; }
+            if (inRect(wx,wy,w/2-60, btnY,120,44)) { game.state='MENU'; return; }
+            if (game.levels[game.levelNum+1] && inRect(wx,wy,w/2+80,btnY,140,44)) {
                 game.startLevel(game.levelNum+1); return;
             }
             return;
         }
 
-        // World clicks
-        const wx=(mx-camera.x)/camera.zoom, wy=(my-camera.y)/camera.zoom;
         const trackSX=(CONFIG.DEFAULT_WIDTH-CONFIG.TRACK_WIDTH)/2, trackSY=CONFIG.HUD_HEIGHT;
         const hasMoveReady = !anim.isActive && game.locoTrack!==-1 && game.selectedCars.size>0;
         for (let i=0; i<game.tracks.length; i++) {
@@ -636,11 +632,12 @@ function inRect(px,py,rx,ry,rw,rh){ return px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh;
 // ────────────────────────── MENU LAYOUT ────────────────────────
 
 function getMenuLayout(w) {
+    const sw=canvas.width;
     let cols=5, btnW=140;
     const btnH=90, gapX=16, gapY=16;
-    if      (w<500) { cols=2; btnW=(w-48-gapX)/2; }
-    else if (w<750) { cols=3; }
-    else if (w<1050){ cols=4; }
+    if      (sw<500) { cols=2; btnW=Math.floor((w-48-gapX)/2); }
+    else if (sw<750) { cols=3; }
+    else if (sw<1050){ cols=4; }
     const gridW=cols*btnW+(cols-1)*gapX, startX=(w-gridW)/2;
     return { cols, btnW, btnH, gapX, gapY, startX, startY:210 };
 }
@@ -806,43 +803,231 @@ function drawPeine(trackCount, trackSX, trackSY) {
 function drawCar(x,y,label,isSelected){
     const w=CONFIG.CAR_WIDTH, h=CONFIG.CAR_HEIGHT;
     const ct=label.charCodeAt(0)%CAR_TYPES.length, st=CAR_TYPES[ct];
+
     if (isSelected){ const pulse=0.5+0.5*Math.sin(animTime*5); ctx.shadowBlur=16+pulse*14; ctx.shadowColor=C.CAR_GLOW; }
-    const bg=ctx.createLinearGradient(x,y,x,y+h); bg.addColorStop(0,st.hi); bg.addColorStop(1,st.lo);
-    ctx.fillStyle=bg; rr(x,y,w,h,4); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,0.16)'; ctx.fillRect(x+2,y+2,w-4,h*0.35);
-    ctx.strokeStyle=st.ac; ctx.lineWidth=1.5;
-    if      (ct===0){ for(let i=1;i<4;i++){const lx=x+i*(w/4);ctx.beginPath();ctx.moveTo(lx,y+3);ctx.lineTo(lx,y+h-3);ctx.stroke();} }
-    else if (ct===1){ fillRR(x+8,y+8,18,22,2,st.ac); fillRR(x+34,y+8,18,22,2,st.ac); }
-    else if (ct===2){ fillRR(x+4,y+5,w-8,h-10,2,st.ac); ctx.fillStyle='rgba(255,255,255,0.06)'; for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x+14+i*16,y+h/2+2,3.5,0,Math.PI*2);ctx.fill();} }
-    else if (ct===3){ fillRR(x+3,y+7,w-6,h-14,12,st.ac); ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.beginPath();ctx.ellipse(x+w/2,y+h/3,w/3.5,h/6,0,0,Math.PI*2);ctx.fill(); ctx.fillStyle=st.ac; ctx.beginPath();ctx.arc(x+w/2,y+9,5,0,Math.PI*2);ctx.fill(); }
-    else if (ct===4){ fillRR(x+4,y+3,w-8,h-6,2,st.ac); ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; for(let cx2=x+9;cx2<x+w-8;cx2+=5){ctx.beginPath();ctx.moveTo(cx2,y+4);ctx.lineTo(cx2,y+h-5);ctx.stroke();} }
+
+    // ── Wheel bogies ───────────────────────────────────────────
+    const bcy=y+h-7, wR=4;
+    ctx.fillStyle='#181818';
+    ctx.fillRect(x+4,    bcy-3,17,6);
+    ctx.fillRect(x+w-21, bcy-3,17,6);
+    for (const wx of [x+7,x+15,x+w-21,x+w-13]){
+        ctx.fillStyle='#252525'; ctx.beginPath(); ctx.arc(wx,bcy,wR,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#3a3a3a'; ctx.beginPath(); ctx.arc(wx,bcy,wR-1.2,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#777';    ctx.beginPath(); ctx.arc(wx,bcy,1.2,0,Math.PI*2); ctx.fill();
+    }
+    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x+7,bcy);    ctx.lineTo(x+15,bcy);    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w-21,bcy); ctx.lineTo(x+w-13,bcy); ctx.stroke();
+
+    // ── Car body (27 px tall, sits above bogies) ───────────────
+    const bx=x, by=y+1, bw=w, bh=h-13;
+    switch(ct){
+        case 0: _carBoxcar   (bx,by,bw,bh,st); break;
+        case 1: _carHopper   (bx,by,bw,bh,st); break;
+        case 2: _carGondola  (bx,by,bw,bh,st); break;
+        case 3: _carTanker   (bx,by,bw,bh,st); break;
+        case 4: _carContainer(bx,by,bw,bh,st); break;
+    }
+
     ctx.shadowBlur=0;
-    ctx.fillStyle='#0d0d0d';
-    [[x+5,y-2],[x+w-15,y-2],[x+5,y+h-4],[x+w-15,y+h-4]].forEach(([wx,wy])=>ctx.fillRect(wx,wy,10,5));
-    ctx.strokeStyle=isSelected?C.CAR_GLOW:'rgba(0,0,0,0.55)'; ctx.lineWidth=isSelected?2:1.5;
-    rr(x,y,w,h,4); ctx.stroke(); ctx.shadowBlur=0;
-    txt(label,x+w/2+1,y+h/2+7,16,'rgba(0,0,0,0.7)','center','bold');
-    txt(label,x+w/2,  y+h/2+6,16,'#ffffff',        'center','bold');
+    ctx.strokeStyle=isSelected?C.CAR_GLOW:'rgba(0,0,0,0.55)';
+    ctx.lineWidth=isSelected?2:1;
+    rr(bx,by,bw,bh,2); ctx.stroke();
+
+    // Label badge
+    const lx=bx+bw/2, ly=by+bh/2+5;
+    fillRR(lx-7,ly-9,14,12,3,'rgba(0,0,0,0.58)');
+    txt(label,lx+1,ly,12,'rgba(0,0,0,0.5)','center','bold');
+    txt(label,lx,  ly,12,'#fff',           'center','bold');
+}
+
+// ── Per-type car renderers ──────────────────────────────────────
+
+function _carBoxcar(x,y,w,h,st){
+    const bg=ctx.createLinearGradient(x,y,x,y+h);
+    bg.addColorStop(0,st.hi); bg.addColorStop(1,st.lo);
+    fillRR(x,y,w,h,2,bg);
+    // Roof cap
+    fillRR(x,y,w,5,2,st.roof);
+    // Side panels (darker)
+    ctx.fillStyle='rgba(0,0,0,0.14)';
+    ctx.fillRect(x+3,y+5,12,h-7);
+    ctx.fillRect(x+w-15,y+5,12,h-7);
+    // Sliding door (center lighter panel)
+    ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.fillRect(x+17,y+5,26,h-7);
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1;
+    ctx.strokeRect(x+17,y+5,26,h-7);
+    ctx.beginPath(); ctx.moveTo(x+30,y+6); ctx.lineTo(x+30,y+h-2); ctx.stroke();
+    // Corner posts
+    ctx.fillStyle=st.ac; ctx.fillRect(x,y,3,h); ctx.fillRect(x+w-3,y,3,h);
+    // Rivet row bottom
+    ctx.fillStyle='rgba(0,0,0,0.28)';
+    for(let rx=x+8;rx<x+w-6;rx+=9){ ctx.beginPath(); ctx.arc(rx,y+h-3,1,0,Math.PI*2); ctx.fill(); }
+    // Highlight
+    ctx.fillStyle='rgba(255,255,255,0.13)'; ctx.fillRect(x+3,y+1,w-6,4);
+}
+
+function _carHopper(x,y,w,h,st){
+    const sl=8;
+    // Trapezoid body
+    ctx.beginPath();
+    ctx.moveTo(x,y); ctx.lineTo(x+w,y);
+    ctx.lineTo(x+w-sl,y+h); ctx.lineTo(x+sl,y+h);
+    ctx.closePath();
+    const hg=ctx.createLinearGradient(x,y,x,y+h);
+    hg.addColorStop(0,st.hi); hg.addColorStop(1,st.lo);
+    ctx.fillStyle=hg; ctx.fill();
+    // Hatch covers on top
+    ctx.fillStyle='rgba(255,255,255,0.08)';
+    ctx.fillRect(x+7,y+1,14,5); ctx.fillRect(x+26,y+1,14,5);
+    ctx.strokeStyle=st.ac; ctx.lineWidth=1;
+    ctx.strokeRect(x+7,y+1,14,5); ctx.strokeRect(x+26,y+1,14,5);
+    // Slanted ribs
+    ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=1.5;
+    [[x+16, x+sl+(w-sl*2)*0.27],[x+w/2,x+sl+(w-sl*2)*0.5],[x+w-16,x+sl+(w-sl*2)*0.73]]
+        .forEach(([tx2,bx2])=>{ ctx.beginPath(); ctx.moveTo(tx2,y+6); ctx.lineTo(bx2,y+h); ctx.stroke(); });
+    // Top rim
+    ctx.fillStyle=st.rim; ctx.fillRect(x,y,w,3);
+    // Discharge gates
+    ctx.fillStyle='rgba(0,0,0,0.45)';
+    ctx.fillRect(x+sl+2,y+h-5,(w-sl*2)/2-3,4);
+    ctx.fillRect(x+w/2+1,y+h-5,(w-sl*2)/2-3,4);
+    ctx.fillStyle='rgba(255,255,255,0.09)'; ctx.fillRect(x+2,y+1,w-4,3);
+}
+
+function _carGondola(x,y,w,h,st){
+    const wall=5;
+    const gg=ctx.createLinearGradient(x,y,x,y+h);
+    gg.addColorStop(0,st.hi); gg.addColorStop(1,st.lo);
+    fillRR(x,y,w,h,2,gg);
+    // Open interior
+    ctx.fillStyle=st.ac; ctx.fillRect(x+wall,y+wall,w-wall*2,h-wall*2);
+    ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(x+wall,y+wall,w-wall*2,3);
+    // Stake pocket ribs
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=1;
+    for(const rx of [x+13,x+27,x+w-13]){
+        ctx.beginPath(); ctx.moveTo(rx,y); ctx.lineTo(rx,y+h); ctx.stroke();
+    }
+    // Top rail cap
+    ctx.fillStyle=st.rim;
+    ctx.fillRect(x,y,w,3); ctx.fillRect(x,y,3,h); ctx.fillRect(x+w-3,y,3,h);
+}
+
+function _carTanker(x,y,w,h,st){
+    // Underframe
+    ctx.fillStyle='#141414'; ctx.fillRect(x,y+h-5,w,5);
+    ctx.fillStyle='#1e1e1e';
+    ctx.fillRect(x,y+Math.round(h*0.4),5,Math.round(h*0.5));
+    ctx.fillRect(x+w-5,y+Math.round(h*0.4),5,Math.round(h*0.5));
+    // Cylindrical tank
+    const cx=x+w/2, cy=y+h*0.44, rx=w/2-2, ry=h*0.42;
+    const tg=ctx.createRadialGradient(cx-rx*0.3,cy-ry*0.3,ry*0.05,cx,cy,rx);
+    tg.addColorStop(0,st.hi); tg.addColorStop(0.6,st.lo); tg.addColorStop(1,'#0e0e0e');
+    ctx.fillStyle=tg;
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
+    // Color band
+    ctx.strokeStyle=st.band; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.stroke();
+    // Safety dome
+    ctx.fillStyle=st.hi;
+    ctx.beginPath(); ctx.ellipse(cx,cy-ry+1,5,3,0,Math.PI,0); ctx.fill();
+    // Walkway
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x+7,cy-ry+2); ctx.lineTo(x+w-7,cy-ry+2); ctx.stroke();
+    // Specular
+    ctx.fillStyle='rgba(255,255,255,0.16)';
+    ctx.beginPath(); ctx.ellipse(cx-rx*0.28,cy-ry*0.32,rx*0.32,ry*0.28,-0.3,0,Math.PI*2); ctx.fill();
+}
+
+function _carContainer(x,y,w,h,st){
+    const cg=ctx.createLinearGradient(x,y,x,y+h);
+    cg.addColorStop(0,st.hi); cg.addColorStop(1,st.lo);
+    fillRR(x,y,w,h,2,cg);
+    // Corrugation ridges
+    ctx.strokeStyle='rgba(0,0,0,0.16)'; ctx.lineWidth=1;
+    for(let rx=x+6;rx<x+w-3;rx+=5){
+        ctx.beginPath(); ctx.moveTo(rx,y+2); ctx.lineTo(rx,y+h-2); ctx.stroke();
+    }
+    // Company stripe
+    ctx.fillStyle=st.stripe; ctx.fillRect(x+2,y+Math.round(h*0.58),w-4,3);
+    // Corner castings
+    [[x,y],[x+w-5,y],[x,y+h-5],[x+w-5,y+h-5]].forEach(([fx,fy])=>{
+        ctx.fillStyle='#111'; ctx.fillRect(fx,fy,5,5);
+        ctx.fillStyle='#333'; ctx.fillRect(fx+1,fy+1,3,3);
+    });
+    // Door lock bars (right end)
+    ctx.strokeStyle='rgba(0,0,0,0.38)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x+w-8,y+3); ctx.lineTo(x+w-8,y+h-3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w-5,y+3); ctx.lineTo(x+w-5,y+h-3); ctx.stroke();
+    // Highlight
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(x+2,y+1,w-4,4);
 }
 
 // ──────────────────────── LOCO BUTTON ──────────────────────────
 
 function drawLocoButton(x,y,w,h,isActive){
     const lo=isActive?C.LOCO_RED:C.LOCO_GREY, hi=isActive?C.LOCO_RED2:C.LOCO_GREY2;
-    const grad=ctx.createLinearGradient(x,y,x,y+h); grad.addColorStop(0,hi); grad.addColorStop(1,lo);
-    if(isActive){ctx.shadowBlur=10;ctx.shadowColor=C.LOCO_RED2;}
-    ctx.fillStyle=grad; rr(x,y,w,h,7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fillRect(x+2,y+2,w-4,h/2-2);
-    strokeRR(x,y,w,h,7,isActive?'rgba(255,100,100,0.4)':'rgba(255,255,255,0.1)');
-    const cy=y+h/2;
-    ctx.fillStyle='rgba(255,255,255,'+(isActive?'0.95':'0.55')+')';
+
+    if(isActive){ ctx.shadowBlur=12; ctx.shadowColor=C.LOCO_RED2; }
+
+    // ── Bogies (same style as cars) ─────────────────────────────
+    const bcy=y+h+1, wR=4;
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#181818';
+    ctx.fillRect(x+2, bcy-3, 15, 6);
+    ctx.fillRect(x+w-17, bcy-3, 15, 6);
+    for(const wx of [x+5, x+12, x+w-17, x+w-10]){
+        ctx.fillStyle='#252525'; ctx.beginPath(); ctx.arc(wx,bcy,wR,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#3a3a3a'; ctx.beginPath(); ctx.arc(wx,bcy,wR-1.2,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#777';    ctx.beginPath(); ctx.arc(wx,bcy,1.2,0,Math.PI*2); ctx.fill();
+    }
+    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x+5,bcy); ctx.lineTo(x+12,bcy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w-17,bcy); ctx.lineTo(x+w-10,bcy); ctx.stroke();
+
+    if(isActive){ ctx.shadowBlur=12; ctx.shadowColor=C.LOCO_RED2; }
+
+    // ── Locomotive body ─────────────────────────────────────────
+    const grad=ctx.createLinearGradient(x,y,x,y+h);
+    grad.addColorStop(0,hi); grad.addColorStop(1,lo);
+    ctx.fillStyle=grad; rr(x,y,w,h,4); ctx.fill(); ctx.shadowBlur=0;
+
+    // Cab roof (darker)
+    ctx.fillStyle=isActive?'#7a1010':'#222'; ctx.fillRect(x,y,w,5);
+    // Body highlight
+    ctx.fillStyle='rgba(255,255,255,0.14)'; ctx.fillRect(x+2,y+1,w-4,5);
+
+    // Long hood / nose (front)
+    ctx.fillStyle=isActive?'rgba(0,0,0,0.25)':'rgba(0,0,0,0.2)';
+    ctx.fillRect(x+2,y+6,w-4,h-14);
+
+    // Cab windows
+    ctx.fillStyle='rgba(120,200,255,0.55)';
+    fillRR(x+4,y+7,10,9,2,'rgba(100,180,255,0.55)');
+    fillRR(x+w-14,y+7,10,9,2,'rgba(100,180,255,0.55)');
+    // Window frames
+    ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=1;
+    ctx.strokeRect(x+4,y+7,10,9); ctx.strokeRect(x+w-14,y+7,10,9);
+
+    // Running light / headlight
     if(isActive){
-        ctx.fillRect(x+6,cy-8,26,13); ctx.fillRect(x+26,cy-13,12,10); ctx.fillRect(x+14,cy-15,5,7);
-        ctx.fillStyle='rgba(255,255,255,0.7)';
-        ctx.beginPath();ctx.arc(x+11,cy+6,4,0,Math.PI*2);ctx.fill();
-        ctx.beginPath();ctx.arc(x+28,cy+6,4,0,Math.PI*2);ctx.fill();
-    } else {
-        ctx.beginPath(); ctx.moveTo(x+w/2-6,cy-7); ctx.lineTo(x+w/2+8,cy); ctx.lineTo(x+w/2-6,cy+7); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='rgba(255,220,100,0.9)';
+        ctx.beginPath(); ctx.arc(x+w-6,y+h-8,3,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(255,255,150,0.4)';
+        ctx.beginPath(); ctx.arc(x+w-6,y+h-8,5,0,Math.PI*2); ctx.fill();
+    }
+
+    // Stripe along side
+    ctx.fillStyle=isActive?'rgba(255,255,255,0.18)':'rgba(255,255,255,0.08)';
+    ctx.fillRect(x+2,y+h-9,w-4,3);
+
+    strokeRR(x,y,w,h,4,isActive?'rgba(255,120,120,0.4)':'rgba(255,255,255,0.08)');
+
+    // "LOCO" text or arrow when inactive
+    if(!isActive){
+        ctx.fillStyle='rgba(255,255,255,0.45)';
+        ctx.beginPath(); ctx.moveTo(x+w/2-5,y+h/2-5); ctx.lineTo(x+w/2+7,y+h/2); ctx.lineTo(x+w/2-5,y+h/2+5); ctx.closePath(); ctx.fill();
     }
 }
 
@@ -936,12 +1121,7 @@ function drawHUD(w,h){
 function drawGameScreen(w,h){
     drawHUD(w,h);
 
-    ctx.save();
-    ctx.translate(camera.x,camera.y);
-    ctx.scale(camera.zoom,camera.zoom);
-
-    const worldW=CONFIG.DEFAULT_WIDTH;
-    const trackSX=(worldW-CONFIG.TRACK_WIDTH)/2;
+    const trackSX=(CONFIG.DEFAULT_WIDTH-CONFIG.TRACK_WIDTH)/2;
     const trackSY=CONFIG.HUD_HEIGHT;
 
     // Peine (behind everything else)
@@ -978,8 +1158,6 @@ function drawGameScreen(w,h){
 
     // Draw animated cars + loco (in world coords, on top)
     anim.draw(ctx);
-
-    ctx.restore();
 
     // Bottom bar
     if(game.state==='PLAYING'){
@@ -1139,11 +1317,19 @@ function loop(ts){
     const dt=Math.min((ts-lastTs)/1000,0.05); lastTs=ts; animTime+=dt;
     game.updateTimer();
     anim.update(dt);
-    const w=canvas.width, h=canvas.height;
-    drawBackground(w,h);
-    if      (game.state==='MENU')        drawMenu(w,h);
-    else if (game.state==='LEADERBOARD') drawLeaderboard(w,h);
-    else                                 drawGameScreen(w,h);
+    const sw=canvas.width, sh=canvas.height;
+    const gw=CONFIG.DEFAULT_WIDTH, gh=CONFIG.DEFAULT_HEIGHT;
+    // Letterbox fill
+    ctx.fillStyle=C.BG_TOP; ctx.fillRect(0,0,sw,sh);
+    // Global game transform — scale everything uniformly
+    ctx.save();
+    ctx.translate(camera.x,camera.y);
+    ctx.scale(camera.zoom,camera.zoom);
+    drawBackground(gw,gh);
+    if      (game.state==='MENU')        drawMenu(gw,gh);
+    else if (game.state==='LEADERBOARD') drawLeaderboard(gw,gh);
+    else                                 drawGameScreen(gw,gh);
+    ctx.restore();
     requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
