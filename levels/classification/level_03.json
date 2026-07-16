@@ -1,0 +1,26 @@
+{
+  "id": 3,
+  "name": "Turno 3 · Tráfico cruzado",
+  "description": "2 vías de llegada · 3 destinos · capacidad sobrada",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "C-verde",
+      "F-rojo",
+      "J-azul"
+    ],
+    [
+      "V-verde",
+      "T-rojo",
+      "C-azul",
+      "F-verde",
+      "J-rojo"
+    ]
+  ],
+  "capacities": [
+    4,
+    4,
+    4
+  ]
+}

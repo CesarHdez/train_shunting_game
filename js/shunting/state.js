@@ -1,6 +1,9 @@
-// js/state.js — Game constants, logic, and data classes
+// js/shunting/state.js — Modo Maniobras: constantes, lógica y estado del juego
 
-import { submitScore, fetchGlobalLeaderboard } from './firebase.js';
+import { app } from '../core/app.js';
+import { particles } from '../core/particles.js';
+import { ScoreManager, computeShuntingScore } from '../core/scores.js';
+import { fetchGlobalLeaderboard } from '../core/firebase.js';
 
 // ─────────────────────────── CONFIG ────────────────────────────
 
@@ -25,27 +28,6 @@ export function getCarDims(capacity) {
     const fitW = Math.floor((CONFIG.TRACK_WIDTH - (capacity - 1) * gap) / capacity);
     return { w: Math.min(maxW, fitW), gap };
 }
-
-export const C = {
-    BG_TOP:        '#0d1117',  BG_BOT:     '#1a1f2e',
-    GRID:          'rgba(255,255,255,0.025)',
-    BALLAST:       '#252535',  SLEEPER_A:  '#5d3f2a',  SLEEPER_B: '#4a3322',
-    RAIL_HI:       '#c8d0da',  RAIL_LO:    '#606870',
-    CAR_GLOW:      '#4fc3f7',
-    LOCO_RED:      '#c62828',  LOCO_RED2:  '#ef5350',
-    LOCO_GREY:     '#37474f',  LOCO_GREY2: '#546e7a',
-    TEXT:          '#e8eaf6',  TEXT_DIM:   '#7986cb',  TEXT_WARN: '#ff5252',
-    GOLD:          '#ffd700',  SILVER:     '#b0bec5',  BRONZE:    '#a1887f',
-    SUCCESS:       '#69f0ae',  RECORD:     '#ffd700',
-    STAR_ON:       '#ffd700',  STAR_OFF:   '#37474f',
-    HEADER_BG:     'rgba(8,12,24,0.94)',  TARGET_BG: 'rgba(5,8,18,0.88)',
-    MENU_BG:       '#080c16',  CARD:       '#111827',
-    WIN_OVERLAY:   'rgba(4,6,16,0.93)',
-    MOVE_BTN:      '#1b5e20',  MOVE_BTN2:  '#2e7d32',
-    CAPACITY_OK:   '#546e7a',  CAPACITY_FULL: '#c62828',
-    PEINE_SPINE:   '#8090a0',  PEINE_NODE: '#c8d0da',
-    UNDO_BTN:      '#4a148c',
-};
 
 export const CAR_TYPES = [
     { name: 'Boxcar',    lo: '#7a2e0a', hi: '#c04020', ac: '#4a1806', roof: '#2e1004'   },
@@ -86,44 +68,6 @@ export function buildWaypointsRight(startX, srcY, endX, dstY) {
         { x: fanEndX, y: dstY,       t: 0.80 },
         { x: endX,    y: dstY,       t: 1.00 },
     ];
-}
-
-// ──────────────────────── PARTICLE SYSTEM ──────────────────────
-
-export class ParticleSystem {
-    constructor() { this.p = []; }
-
-    spawnConfetti(cx, cy, count = 160) {
-        for (let i = 0; i < count; i++) {
-            const angle = (Math.random()-0.5)*Math.PI*2, speed = Math.random()*14+3;
-            this.p.push({
-                x: cx+(Math.random()-0.5)*300, y: cy+(Math.random()-0.5)*100,
-                vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-7,
-                w: Math.random()*9+4, h: Math.random()*5+3,
-                color: `hsl(${Math.floor(Math.random()*360)},90%,65%)`,
-                rot: Math.random()*Math.PI*2, rotV: (Math.random()-0.5)*0.25,
-                life: 1, decay: Math.random()*0.008+0.004
-            });
-        }
-    }
-
-    update() {
-        for (let i = this.p.length-1; i >= 0; i--) {
-            const p = this.p[i];
-            p.x += p.vx; p.y += p.vy;
-            p.vy += 0.32; p.vx *= 0.99; p.rot += p.rotV; p.life -= p.decay;
-            if (p.life <= 0) this.p.splice(i, 1);
-        }
-    }
-
-    draw(ctx) {
-        for (const p of this.p) {
-            ctx.save(); ctx.globalAlpha = Math.min(p.life*2, 1);
-            ctx.fillStyle = p.color; ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-            ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h); ctx.restore();
-        }
-        ctx.globalAlpha = 1;
-    }
 }
 
 // ──────────────────────── ANIMATION MANAGER ────────────────────
@@ -204,103 +148,9 @@ export class AnimationManager {
     }
 }
 
-// ──────────────────────── SCORE MANAGER ────────────────────────
-// Item 1: try/catch around JSON.parse, reset on corruption
-// Item 2: djb2 hash + salt to detect tampered entries
-// Item 3: uid per entry for reliable "isMe" detection
+// ──────────────────────── SCORES ────────────────────────────────
 
-const HASH_SALT = 'tr4in$hunt1ng_2024';
-
-function _hashEntry(e) {
-    const str = `${HASH_SALT}|${e.moves}|${e.time}|${e.name}|${e.date}|${e.uid||''}`;
-    let h = 5381;
-    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
-    return (h >>> 0).toString(36);
-}
-
-// Puntaje: maniobras es primario (0-1000), tiempo es secundario (0-200).
-// Si se conoce minMoves, el puntaje de maniobras es exacto; si no, usa el sistema de estrellas.
-function computeScore(moves, time, minMoves, carCount) {
-    let moveScore;
-    if (minMoves != null && minMoves > 0 && moves > 0) {
-        moveScore = Math.round(1000 * Math.pow(Math.min(1, minMoves / moves), 2));
-    } else if (minMoves === 0 && moves === 0) {
-        moveScore = 1000;
-    } else {
-        // Fallback: mapear estrellas a puntaje
-        const n = Math.max(carCount || 2, 2);
-        moveScore = moves <= n + 1 ? 1000 : moves <= n * 2 + 1 ? 600 : 200;
-    }
-    const timeBonus = Math.max(0, 200 - time); // máx 200 pts, decrece 1 pt/segundo
-    return moveScore + timeBonus;
-}
-
-export class ScoreManager {
-    constructor() { this.data = {}; this.lastUid = null; this.load(); }
-
-    load() {
-        // Try loading v2 format
-        try {
-            const v2 = localStorage.getItem('train_scores_v2');
-            if (v2) {
-                const parsed = JSON.parse(v2);
-                this.data = {};
-                for (const [lid, entries] of Object.entries(parsed)) {
-                    if (!Array.isArray(entries)) continue;
-                    this.data[lid] = entries.filter(e => {
-                        if (!e || typeof e !== 'object') return false;
-                        // Legacy entries without _h pass through unchanged
-                        if (!e._h) return true;
-                        return e._h === _hashEntry(e);
-                    });
-                }
-                return;
-            }
-        } catch(e) {
-            // Corrupted data — discard and start fresh
-            localStorage.removeItem('train_scores_v2');
-            this.data = {};
-        }
-        // Migrate from v1 format
-        try {
-            const v1 = localStorage.getItem('train_shunting_scores');
-            if (v1) {
-                const old = JSON.parse(v1);
-                for (const [lid, s] of Object.entries(old)) {
-                    const entry = { moves: s.moves, time: s.time, name: s.name || 'Anon',
-                        date: new Date().toLocaleDateString('es') };
-                    entry._h = _hashEntry(entry);
-                    this.data[lid] = [entry];
-                }
-                this.save();
-            }
-        } catch(e) {
-            localStorage.removeItem('train_shunting_scores');
-        }
-    }
-
-    save() { localStorage.setItem('train_scores_v2', JSON.stringify(this.data)); }
-
-    addScore(levelId, moves, time, name, minMoves = null, carCount = 2) {
-        const lid   = String(levelId);
-        if (!this.data[lid]) this.data[lid] = [];
-        const uid   = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-        const score = computeScore(moves, time, minMoves, carCount);
-        const entry = { moves, time, score, name, date: new Date().toLocaleDateString('es'), uid };
-        entry._h    = _hashEntry(entry); // hash no incluye score (campo derivado)
-        this.data[lid].push(entry);
-        this.data[lid].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); // mayor puntaje primero
-        this.data[lid] = this.data[lid].slice(0, 5);
-        this.save();
-        this.lastUid = uid;
-        submitScore(levelId, entry); // fire-and-forget — no await
-        return this.data[lid].findIndex(e => e.uid === uid) + 1;
-    }
-
-    getBest(levelId)        { return this.data[String(levelId)]?.[0] || null; }
-    getLeaderboard(levelId) { return this.data[String(levelId)] || []; }
-    isCompleted(levelId)    { return (this.data[String(levelId)]?.length || 0) > 0; }
-
+class ShuntingScores extends ScoreManager {
     getStars(levelId, minMoves, carCount) {
         const best = this.getBest(levelId); if (!best) return 0;
         if (minMoves != null) {
@@ -314,8 +164,6 @@ export class ScoreManager {
         if (best.moves <= n*2+1) return 2;
         return 1;
     }
-
-    completedCount() { return Object.keys(this.data).length; }
 }
 
 // ──────────────────────── GAME STATE ───────────────────────────
@@ -324,13 +172,16 @@ export class GameState {
     constructor() {
         this.state        = 'MENU';
         this.levels       = {};
-        this.scores       = new ScoreManager();
+        this.scores       = new ShuntingScores({
+            storageKey:  'train_scores_v2',
+            fbDocPrefix: 'level_',
+            legacyKey:   'train_shunting_scores',
+        });
         this.levelNum     = 1;
         this.tracks       = [];
         this.target       = [];
         this.description  = '';
         this.capacity     = 8;
-        this.playerName   = '';
 
         this.locoTrack    = -1;
         this.selectedCars = new Set();
@@ -363,43 +214,16 @@ export class GameState {
 
         this.globalLeaderboard  = {}; // levelId -> [{name, moves, time, date}]
         this.globalLbLoading    = false;
+        this.winLbLoading       = false;
 
         this.loadLevels();
-        this.setupLogin();
-    }
-
-    // Item 12: persist player name across sessions
-    setupLogin() {
-        const overlay = document.getElementById('login-overlay');
-        const input   = document.getElementById('player-name');
-        const btn     = document.getElementById('start-btn');
-
-        const saved = localStorage.getItem('train_player_name');
-        if (saved) input.value = saved;
-
-        const tryStart = () => {
-            const name = input.value.trim();
-            if (name) {
-                this.playerName = name;
-                localStorage.setItem('train_player_name', name);
-                overlay.style.transition = 'opacity 0.35s';
-                overlay.style.opacity    = '0';
-                setTimeout(() => overlay.style.display = 'none', 350);
-            } else {
-                input.classList.remove('shake');
-                void input.offsetWidth;
-                input.classList.add('shake');
-            }
-        };
-        btn.addEventListener('click', tryStart);
-        input.addEventListener('keypress', e => { if (e.key === 'Enter') tryStart(); });
     }
 
     async loadLevels() {
         for (let i = 1; i <= 100; i++) {
             try {
                 const num = String(i).padStart(2, '0');
-                const res = await fetch(`levels/level_${num}.json?v=${Date.now()}`);
+                const res = await fetch(`levels/shunting/level_${num}.json?v=${Date.now()}`);
                 if (res.ok) {
                     const d = await res.json();
                     this.levels[d.id] = d;
@@ -443,7 +267,7 @@ export class GameState {
     }
 
     advanceTutModal() {
-        // 0→1→2 (caps at 2; steps 3/4 are advanced directly in main.js)
+        // 0→1→2 (caps at 2; steps 3/4 are advanced directly in input.js)
         this.tutModal = Math.min(this.tutModal + 1, 2);
     }
 
@@ -506,14 +330,25 @@ export class GameState {
     }
 
     handleScore() {
-        const rank = this.scores.addScore(
-            this.levelNum, this.moves, this.elapsedTime, this.playerName,
-            this.minMoves, this.target.length
-        );
+        const score = computeShuntingScore(this.moves, this.elapsedTime, this.minMoves, this.target.length);
+        const rank  = this.scores.addScore(this.levelNum, {
+            moves: this.moves,
+            time:  this.elapsedTime,
+            score,
+            name:  app.playerName,
+        });
         this.lastRank  = rank;
         this.newRecord = (rank === 1);
-        // Invalidate cached global data for this level so next leaderboard visit re-fetches
         delete this.globalLeaderboard[this.levelNum];
+        // Fetch fresh global leaderboard for win screen display
+        this.winLbLoading = true;
+        this._dirty = true;
+        const lid = this.levelNum;
+        fetchGlobalLeaderboard(`level_${lid}`, 10).then(entries => {
+            if (entries.length) this.globalLeaderboard[lid] = entries;
+            this.winLbLoading = false;
+            this._dirty = true;
+        }).catch(() => { this.winLbLoading = false; this._dirty = true; });
     }
 
     async loadGlobalLeaderboard() {
@@ -523,7 +358,7 @@ export class GameState {
         const ids = Object.keys(this.levels).map(Number)
                          .filter(id => this.scores.isCompleted(id));
         await Promise.allSettled(ids.map(async id => {
-            const entries = await fetchGlobalLeaderboard(id, 5);
+            const entries = await fetchGlobalLeaderboard(`level_${id}`, 10);
             if (entries.length) this.globalLeaderboard[id] = entries;
         }));
         this.globalLbLoading = false;
@@ -760,6 +595,5 @@ export class GameState {
 
 // ─────────────────────── SINGLETONS ────────────────────────────
 
-export const particles = new ParticleSystem();
-export const anim      = new AnimationManager();
-export const game      = new GameState();
+export const anim = new AnimationManager();
+export const game = new GameState();

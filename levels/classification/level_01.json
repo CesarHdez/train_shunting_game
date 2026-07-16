@@ -1,0 +1,19 @@
+{
+  "id": 1,
+  "name": "Turno 1 · Primeros destinos",
+  "description": "1 vía de llegada · 2 destinos · capacidad sobrada",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "F-rojo",
+      "J-azul",
+      "V-rojo",
+      "C-azul"
+    ]
+  ],
+  "capacities": [
+    4,
+    4
+  ]
+}

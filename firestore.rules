@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{levelId}/entries/{entryId} {
+      // Anyone can read leaderboards
+      allow read: if true;
+      // Only authenticated (anonymous) users can submit scores
+      // Basic validation: name, moves, time must exist and have correct types
+      allow create: if request.auth != null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 15
+        && request.resource.data.moves is number
+        && request.resource.data.moves >= 1
+        && request.resource.data.time is number
+        && request.resource.data.time >= 0;
+      // No editing or deleting scores
+      allow update, delete: if false;
+    }
+  }
+}

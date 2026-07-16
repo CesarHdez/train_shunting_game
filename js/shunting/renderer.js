@@ -1,116 +1,12 @@
-// js/renderer.js — Canvas setup, camera, and all drawing functions
+// js/shunting/renderer.js — Modo Maniobras: todas las funciones de dibujo
 
-import { CONFIG, C, CAR_TYPES, getCarDims, particles, anim, game } from './state.js';
+import { CONFIG, CAR_TYPES, getCarDims, anim, game } from './state.js';
+import { ctx, C, animTime, rr, fillRR, strokeRR, txt, drawStar, formatTime,
+         drawButton, drawTrack, getMenuLayout } from '../core/canvas.js';
+import { particles } from '../core/particles.js';
+import { app } from '../core/app.js';
 
-// ─────────────────────────── CANVAS ────────────────────────────
-
-export const canvas = document.getElementById('gameCanvas');
-export const ctx    = canvas.getContext('2d');
-export const camera = { x: 0, y: 0, zoom: 1, isDragging: false, lastX: 0, lastY: 0 };
-
-let animTime = 0;
-export function tickAnim(dt) {
-    // Wrap to prevent float precision loss after long sessions
-    animTime = (animTime + dt) % (2 * Math.PI * 600);
-}
-
-let _dpr = 1;
-
-export function resize() {
-    _dpr = window.devicePixelRatio || 1;
-    const cssW = window.innerWidth;
-    const cssH = window.innerHeight;
-    canvas.width  = Math.round(cssW * _dpr);
-    canvas.height = Math.round(cssH * _dpr);
-    canvas.style.width  = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-    const scaleX = cssW / CONFIG.DEFAULT_WIDTH;
-    const scaleY = cssH / CONFIG.DEFAULT_HEIGHT;
-    camera.zoom  = Math.min(scaleX, scaleY, 1);
-    camera.x = Math.round((cssW - CONFIG.DEFAULT_WIDTH  * camera.zoom) / 2);
-    camera.y = Math.round((cssH - CONFIG.DEFAULT_HEIGHT * camera.zoom) / 2);
-}
-
-// ─────────────────────── LAYOUT HELPERS ────────────────────────
-
-// Item 6: h parameter now used to compute visibleH for maxScroll
-export function getMenuLayout(w, h) {
-    const sw = canvas.width / _dpr; // use CSS pixels for responsive breakpoints
-    let cols = 5, btnW = 140;
-    const btnH = 90, gapX = 16, gapY = 16;
-    if      (sw < 500)  { cols = 2; btnW = Math.floor((w - 48 - gapX) / 2); }
-    else if (sw < 750)  { cols = 3; }
-    else if (sw < 1050) { cols = 4; }
-    const gridW    = cols * btnW + (cols - 1) * gapX;
-    const startX   = (w - gridW) / 2;
-    const visibleH = h - 215;
-    return { cols, btnW, btnH, gapX, gapY, startX, startY: 210, visibleH };
-}
-
-export function winCardH(w) { return w < 600 ? 380 : 420; }
-
-// ─────────────────────── DRAWING HELPERS ───────────────────────
-
-export function inRect(px, py, rx, ry, rw, rh) {
-    return px >= rx && px <= rx+rw && py >= ry && py <= ry+rh;
-}
-
-function rr(x, y, w, h, r = 0) {
-    if (r > 0 && ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
-    else { ctx.beginPath(); ctx.rect(x, y, w, h); }
-}
-function fillRR(x, y, w, h, r, color) { ctx.fillStyle = color; rr(x, y, w, h, r); ctx.fill(); }
-function strokeRR(x, y, w, h, r, color, lw = 1.5) {
-    ctx.strokeStyle = color; ctx.lineWidth = lw; rr(x, y, w, h, r); ctx.stroke();
-}
-function txt(text, x, y, size, color, align = 'left', weight = '600') {
-    ctx.fillStyle = color;
-    ctx.font      = `${weight} ${size}px Rajdhani,Arial,sans-serif`;
-    ctx.textAlign = align;
-    ctx.fillText(text, x, y);
-}
-function drawStar(cx, cy, r, filled) {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-        const a   = (i * Math.PI) / 5 - Math.PI / 2;
-        const rad = i % 2 === 0 ? r : r * 0.42;
-        const x   = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.closePath(); ctx.fillStyle = filled ? C.STAR_ON : C.STAR_OFF; ctx.fill();
-    if (filled) { ctx.strokeStyle = 'rgba(255,215,0,0.5)'; ctx.lineWidth = 1; ctx.stroke(); }
-}
-function formatTime(secs) {
-    const m = Math.floor(secs / 60), s = secs % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-// ─────────────────────── BACKGROUND ────────────────────────────
-
-export function drawBackground(w, h) {
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, C.BG_TOP); grad.addColorStop(1, C.BG_BOT);
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = C.GRID; ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-    for (let y = 0; y < h; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-}
-
-// ───────────────────────── TRACK ───────────────────────────────
-
-function drawTrack(x, y, width) {
-    fillRR(x-6, y-18, width+12, 36, 2, C.BALLAST);
-    const slW = 13, slH = 30, slGap = 18;
-    for (let sx = x; sx < x+width; sx += slGap) {
-        ctx.fillStyle = (Math.floor(sx/slGap) % 2 === 0) ? C.SLEEPER_A : C.SLEEPER_B;
-        ctx.fillRect(sx-1, y-slH/2, slW, slH);
-    }
-    for (const off of [-10, 10]) {
-        const rg = ctx.createLinearGradient(x, y+off-4, x, y+off+4);
-        rg.addColorStop(0, C.RAIL_HI); rg.addColorStop(1, C.RAIL_LO);
-        ctx.fillStyle = rg; ctx.fillRect(x, y+off-3, width, 6);
-    }
-}
+export function winCardH(w) { return w < 600 ? 520 : 560; }
 
 // ─────────────────────────── PEINE ─────────────────────────────
 
@@ -511,16 +407,6 @@ function drawClearanceMarker(trackX, trackTopY, isTarget) {
     }
 }
 
-// ─────────────────────── CANVAS BUTTON ─────────────────────────
-
-function drawButton(x, y, w, h, label, color) {
-    fillRR(x+2, y+2, w, h, 7, 'rgba(0,0,0,0.4)');
-    ctx.fillStyle = color; rr(x, y, w, h, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x+2, y+2, w-4, h*0.45);
-    strokeRR(x, y, w, h, 7, 'rgba(255,255,255,0.15)');
-    txt(label, x+w/2, y+h/2+6, Math.floor(h*0.38), '#fff', 'center', '700');
-}
-
 // ─────────────────────────── HUD ───────────────────────────────
 
 function drawHUD(w, h) {
@@ -781,22 +667,29 @@ export function drawWinScreen(w, h) {
         w/2, cardY+148, Math.min(14, cardW * 0.023), C.TEXT_DIM, 'center', '600');
     const lbY = cardY+168, lbH = cardH - 168 - 70;
     fillRR(cardX+16, lbY, cardW-32, lbH, 8, 'rgba(0,0,0,0.3)');
-    txt(`PUNTAJES — NIVEL ${game.levelNum}`, w/2, lbY+20, 13, C.TEXT_DIM, 'center', '700');
-    const board = game.scores.getLeaderboard(game.levelNum);
-    const medC  = [C.GOLD, C.SILVER, C.BRONZE, C.TEXT_DIM, C.TEXT_DIM];
-    board.slice(0, 5).forEach((entry, i) => {
-        const ey = lbY + 38 + i*22;
-        // Item 3: use uid for reliable "isMe" identification
-        const isMe = !!(game.scores.lastUid && entry.uid === game.scores.lastUid);
-        if (isMe) { ctx.fillStyle = 'rgba(79,195,247,0.08)'; ctx.fillRect(cardX+16, ey-14, cardW-32, 20); }
-        const ec = isMe ? '#4fc3f7' : medC[i], ew = isMe ? '700' : '600';
-        txt(`${i+1}.`,        cardX+30,  ey, 14, ec, 'left',  ew);
-        txt(entry.name,       cardX+60,  ey, 14, ec, 'left',  ew);
-        if (entry.score != null)
-            txt(`${entry.score} pts`, w/2, ey, 13, ec, 'center', ew);
-        txt(`${entry.moves}m · ${formatTime(entry.time)}`, cardX+cardW-30, ey, 12, ec, 'right', ew);
-    });
-    if (!board.length) txt('¡Primer intento!', w/2, lbY+lbH/2+6, 16, C.TEXT_DIM, 'center', '600');
+    const globalBoard = game.globalLeaderboard[game.levelNum];
+    const isGlobal    = !!globalBoard;
+    const board       = globalBoard || game.scores.getLeaderboard(game.levelNum);
+    const boardLabel  = isGlobal ? `RANKING GLOBAL — NIVEL ${game.levelNum}` : `PUNTAJES — NIVEL ${game.levelNum}`;
+    txt(boardLabel, w/2, lbY+20, 13, isGlobal ? C.SUCCESS : C.TEXT_DIM, 'center', '700');
+    if (game.winLbLoading) {
+        txt('Cargando ranking global…', w/2, lbY+lbH/2+6, 13, C.TEXT_DIM, 'center', '600');
+    } else {
+        const medC = [C.GOLD, C.SILVER, C.BRONZE, C.TEXT_DIM, C.TEXT_DIM,
+                      C.TEXT_DIM, C.TEXT_DIM, C.TEXT_DIM, C.TEXT_DIM, C.TEXT_DIM];
+        board.slice(0, 10).forEach((entry, i) => {
+            const ey = lbY + 36 + i*20;
+            const isMe = !!(game.scores.lastUid && entry.uid === game.scores.lastUid);
+            if (isMe) { ctx.fillStyle = 'rgba(79,195,247,0.08)'; ctx.fillRect(cardX+16, ey-14, cardW-32, 20); }
+            const ec = isMe ? '#4fc3f7' : medC[i], ew = isMe ? '700' : '600';
+            txt(`${i+1}.`,        cardX+30,  ey, 14, ec, 'left',  ew);
+            txt(entry.name,       cardX+60,  ey, 14, ec, 'left',  ew);
+            if (entry.score != null)
+                txt(`${entry.score} pts`, w/2, ey, 13, ec, 'center', ew);
+            txt(`${entry.moves}m · ${formatTime(entry.time)}`, cardX+cardW-30, ey, 12, ec, 'right', ew);
+        });
+        if (!board.length) txt('¡Primer intento!', w/2, lbY+lbH/2+6, 16, C.TEXT_DIM, 'center', '600');
+    }
     const btnY = cardY + cardH - 58;
     drawButton(w/2-220, btnY, 125, 44, '↺ REPETIR',   '#37474f');
     drawButton(w/2-60,  btnY, 120, 44, '≡ MENÚ',      '#1a237e');
@@ -811,11 +704,12 @@ export function drawMenu(w, h) {
     ctx.fillStyle = C.HEADER_BG; ctx.fillRect(0, 0, w, 200);
     ctx.fillStyle = 'rgba(255,215,0,0.06)'; ctx.fillRect(0, 199, w, 1);
     ctx.shadowBlur = 30; ctx.shadowColor = 'rgba(255,215,0,0.3)';
-    txt('PATIO DE TRENES', w/2, 72, Math.min(52, w*0.055), C.GOLD, 'center', '700');
+    txt('PATIO DE MANIOBRAS', w/2, 72, Math.min(52, w*0.055), C.GOLD, 'center', '700');
     ctx.shadowBlur = 0;
     txt('PUZZLE DE MANIOBRAS FERROVIARIAS', w/2, 100, 15, C.TEXT_DIM, 'center', '600');
-    if (game.playerName) {
-        txt(`Jugador: ${game.playerName}`, w/2, 132, 18, C.TEXT, 'center', '600');
+    drawButton(12, 12, 110, 42, '← MODOS', '#37474f');
+    if (app.playerName) {
+        txt(`Jugador: ${app.playerName}`, w/2, 132, 18, C.TEXT, 'center', '600');
         const done  = game.scores.completedCount();
         const total = Object.keys(game.levels).length;
         const barW  = Math.min(300, w*0.55), barX = w/2 - barW/2;
@@ -919,19 +813,10 @@ export function drawLeaderboard(w, h) {
 
 // ─────────────────────── RENDER FRAME ──────────────────────────
 
-export function render() {
+// Dibuja la pantalla que corresponda al estado actual del modo maniobras.
+export function renderShunting(w, h) {
     const state = game.state;
-    const cssW  = canvas.width / _dpr;
-    const cssH  = canvas.height / _dpr;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(_dpr, _dpr);                          // map CSS→physical pixels
-    ctx.fillStyle = C.BG_TOP; ctx.fillRect(0, 0, cssW, cssH);
-    ctx.translate(camera.x, camera.y);
-    ctx.scale(camera.zoom, camera.zoom);
-    drawBackground(CONFIG.DEFAULT_WIDTH, CONFIG.DEFAULT_HEIGHT);
-    if      (state === 'MENU')        drawMenu(CONFIG.DEFAULT_WIDTH, CONFIG.DEFAULT_HEIGHT);
-    else if (state === 'LEADERBOARD') drawLeaderboard(CONFIG.DEFAULT_WIDTH, CONFIG.DEFAULT_HEIGHT);
-    else                              drawGameScreen(CONFIG.DEFAULT_WIDTH, CONFIG.DEFAULT_HEIGHT);
-    ctx.restore();
+    if      (state === 'MENU')        drawMenu(w, h);
+    else if (state === 'LEADERBOARD') drawLeaderboard(w, h);
+    else                              drawGameScreen(w, h);
 }

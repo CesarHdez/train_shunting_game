@@ -1,0 +1,36 @@
+{
+  "id": 8,
+  "name": "Turno 8 · Cinco destinos",
+  "description": "3 vías de llegada · 5 destinos, 4 vías → 1 salto inevitable",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "V-verde",
+      "C-ambar",
+      "J-violeta",
+      "T-rojo"
+    ],
+    [
+      "C-azul",
+      "F-verde",
+      "V-ambar",
+      "J-rojo",
+      "T-violeta",
+      "C-azul"
+    ],
+    [
+      "F-violeta",
+      "T-rojo",
+      "V-azul",
+      "J-verde",
+      "C-ambar"
+    ]
+  ],
+  "capacities": [
+    4,
+    4,
+    3,
+    6
+  ]
+}

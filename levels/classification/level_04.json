@@ -1,0 +1,27 @@
+{
+  "id": 4,
+  "name": "Turno 4 · Encaje perfecto",
+  "description": "2 vías de llegada · 3 destinos · capacidad exacta",
+  "arrivals": [
+    [
+      "T-verde",
+      "F-rojo",
+      "C-azul",
+      "F-verde",
+      "J-rojo",
+      "V-azul"
+    ],
+    [
+      "C-rojo",
+      "T-azul",
+      "F-verde",
+      "V-rojo",
+      "J-azul"
+    ]
+  ],
+  "capacities": [
+    4,
+    3,
+    4
+  ]
+}

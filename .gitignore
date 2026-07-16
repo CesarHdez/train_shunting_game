@@ -32,6 +32,14 @@ venv/
 
 # Agentic
 .gemini/
+.claude/
+skills-lock.json
+
+# Firebase local cache
+.firebase/
+
+# Node
+node_modules/
 
 # Game dev artifacts
 scores.json

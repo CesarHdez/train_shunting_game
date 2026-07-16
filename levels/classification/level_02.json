@@ -1,0 +1,21 @@
+{
+  "id": 2,
+  "name": "Turno 2 · Sin margen",
+  "description": "1 vía de llegada · 2 destinos · capacidad exacta",
+  "arrivals": [
+    [
+      "T-rojo",
+      "F-azul",
+      "V-rojo",
+      "C-azul",
+      "J-rojo",
+      "T-azul",
+      "F-rojo",
+      "V-azul"
+    ]
+  ],
+  "capacities": [
+    4,
+    4
+  ]
+}

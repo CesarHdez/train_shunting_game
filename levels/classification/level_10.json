@@ -1,0 +1,43 @@
+{
+  "id": 10,
+  "name": "Turno 10 · Hora pico final",
+  "description": "4 vías de llegada · 5 destinos · 4 vías, capacidad exacta → 1 salto inevitable",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "V-verde",
+      "C-ambar",
+      "J-violeta",
+      "T-rojo"
+    ],
+    [
+      "C-azul",
+      "F-verde",
+      "V-ambar",
+      "J-violeta",
+      "T-rojo",
+      "C-azul"
+    ],
+    [
+      "F-violeta",
+      "T-ambar",
+      "V-rojo",
+      "J-azul",
+      "C-verde"
+    ],
+    [
+      "T-verde",
+      "C-rojo",
+      "F-azul",
+      "V-violeta",
+      "J-ambar"
+    ]
+  ],
+  "capacities": [
+    5,
+    5,
+    4,
+    8
+  ]
+}

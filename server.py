@@ -7,14 +7,19 @@ import sys
 PORT = 8000
 Handler = http.server.SimpleHTTPRequestHandler
 
-# Allow reusing address to avoid "Address already in use" errors on restart
-socketserver.TCPServer.allow_reuse_address = True
+# Allow reusing address to avoid "Address already in use" errors on restart.
+# On Windows, SO_REUSEADDR lets two processes bind the SAME port silently
+# (requests go to the other process), so only enable it elsewhere.
+socketserver.TCPServer.allow_reuse_address = (sys.platform != "win32")
 
 def run_server():
     global PORT
     while True:
         try:
-            with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            # Bind explícito a 127.0.0.1: así un puerto ya usado por otro proceso
+            # en localhost provoca error y se pasa al siguiente puerto (en vez de
+            # enlazar 0.0.0.0 "con éxito" y que localhost lo atienda el otro proceso).
+            with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
                 url = f"http://localhost:{PORT}"
                 print(f"Serving at {url}")
                 
