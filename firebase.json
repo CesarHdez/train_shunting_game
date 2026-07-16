@@ -6,10 +6,13 @@
       "firestore.rules",
       "firestore.indexes.json",
       "server.py",
-      ".firebaserc",
-      "skills-lock.json",
-      ".claude",
-      "node_modules"
+      "compute_min_moves.js",
+      "CLAUDE.md",
+      "patio-clasificacion_1.jsx",
+      "**/.*",
+      "**/.*/**",
+      "**/node_modules/**",
+      "skills-lock.json"
     ],
     "headers": [
       {

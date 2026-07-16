@@ -4,16 +4,28 @@ service cloud.firestore {
     match /scores/{levelId}/entries/{entryId} {
       // Anyone can read leaderboards
       allow read: if true;
-      // Only authenticated (anonymous) users can submit scores
-      // Basic validation: name, moves, time must exist and have correct types
+      // Only authenticated (anonymous) users can submit scores.
+      // - Doc ids restricted to level_N / clf_level_N (one namespace per game mode)
+      // - Exact field set, typed and bounded (score capped to block leaderboard poisoning)
+      // - uid must match the authenticated user
       allow create: if request.auth != null
+        && levelId.matches('(clf_)?level_[0-9]{1,3}')
+        && request.resource.data.keys().hasOnly(['name', 'moves', 'time', 'score', 'date', 'uid'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 15
-        && request.resource.data.moves is number
+        && request.resource.data.moves is int
         && request.resource.data.moves >= 1
-        && request.resource.data.time is number
-        && request.resource.data.time >= 0;
+        && request.resource.data.moves <= 10000
+        && request.resource.data.time is int
+        && request.resource.data.time >= 0
+        && request.resource.data.time <= 86400
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 5000
+        && request.resource.data.date is string
+        && request.resource.data.date.size() <= 20
+        && request.resource.data.uid == request.auth.uid;
       // No editing or deleting scores
       allow update, delete: if false;
     }
