@@ -1,0 +1,47 @@
+{
+  "id": 11,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "A",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "E",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "description": "Nivel 11: Medio. Cinco vagones dispersos.",
+  "capacity": 6,
+  "minMoves": 5
+}

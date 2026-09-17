@@ -1,0 +1,53 @@
+{
+  "id": 18,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "E",
+      "C",
+      "A",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "B",
+      "G",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "F",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G"
+  ],
+  "description": "Nivel 18: Difícil. Siete vagones, espacio limitado.",
+  "capacity": 7,
+  "minMoves": null
+}

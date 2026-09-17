@@ -1,0 +1,62 @@
+{
+  "id": 21,
+  "tracks": [
+    [
+      "D",
+      "G",
+      "B",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "E",
+      "A",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "F",
+      "C",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G"
+  ],
+  "description": "Nivel 21: Difícil. Vagones profundamente enterrados.",
+  "capacity": 7,
+  "minMoves": null
+}

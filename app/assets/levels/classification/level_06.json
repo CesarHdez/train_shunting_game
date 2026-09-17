@@ -1,0 +1,35 @@
+{
+  "id": 6,
+  "name": "Turno 6 · Patio grande",
+  "description": "3 vías de llegada · 4 destinos · 4 vías, capacidad exacta",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "V-verde",
+      "C-ambar",
+      "J-rojo",
+      "T-verde"
+    ],
+    [
+      "C-rojo",
+      "F-azul",
+      "V-ambar",
+      "J-verde",
+      "T-rojo"
+    ],
+    [
+      "C-azul",
+      "F-verde",
+      "V-rojo",
+      "J-ambar",
+      "T-azul"
+    ]
+  ],
+  "capacities": [
+    5,
+    4,
+    4,
+    3
+  ]
+}

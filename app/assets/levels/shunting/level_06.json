@@ -1,0 +1,39 @@
+{
+  "id": 6,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "B",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "E",
+      "A",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "description": "Nivel 6: Fácil. Cinco vagones en dos vías.",
+  "capacity": 6,
+  "minMoves": 6
+}

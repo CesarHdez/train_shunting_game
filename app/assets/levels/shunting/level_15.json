@@ -1,0 +1,48 @@
+{
+  "id": 15,
+  "tracks": [
+    [
+      "F",
+      "C",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "A",
+      "E",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "description": "Nivel 15: Medio. Planifica bien tus movimientos.",
+  "capacity": 6,
+  "minMoves": 7
+}

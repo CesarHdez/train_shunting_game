@@ -1,0 +1,56 @@
+{
+  "id": 17,
+  "tracks": [
+    [
+      "D",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "F",
+      "C",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "A",
+      "E",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "description": "Nivel 17: Medio-Difícil. Seis vagones muy dispersos.",
+  "capacity": 6,
+  "minMoves": 6
+}

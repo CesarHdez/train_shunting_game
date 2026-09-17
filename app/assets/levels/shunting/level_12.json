@@ -1,0 +1,48 @@
+{
+  "id": 12,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "D",
+      "B",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "F",
+      "A",
+      "",
+      "",
+      ""
+    ],
+    [
+      "E",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "description": "Nivel 12: Medio. Seis vagones mezclados.",
+  "capacity": 6,
+  "minMoves": 7
+}

@@ -1,0 +1,47 @@
+{
+  "id": 7,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "D",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "A",
+      "E",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "description": "Nivel 7: Fácil. Cuatro vías disponibles.",
+  "capacity": 6,
+  "minMoves": 4
+}

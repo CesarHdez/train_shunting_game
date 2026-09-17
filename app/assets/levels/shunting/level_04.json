@@ -1,0 +1,38 @@
+{
+  "id": 4,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "D",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "A",
+      "C",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "description": "Nivel 4: Fácil. Cuatro vagones entrelazados.",
+  "capacity": 6,
+  "minMoves": 3
+}

@@ -1,0 +1,38 @@
+{
+  "id": 5,
+  "tracks": [
+    [
+      "D",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "B",
+      "C",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "A",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "description": "Nivel 5: Fácil. Tres vías, cuatro vagones.",
+  "capacity": 6,
+  "minMoves": 2
+}

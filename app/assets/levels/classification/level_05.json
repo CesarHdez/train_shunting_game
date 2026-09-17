@@ -1,0 +1,28 @@
+{
+  "id": 5,
+  "name": "Turno 5 · Un destino de más",
+  "description": "2 vías de llegada · 4 destinos, 3 vías → 1 salto inevitable",
+  "arrivals": [
+    [
+      "F-rojo",
+      "T-azul",
+      "C-verde",
+      "F-ambar",
+      "J-rojo",
+      "V-azul"
+    ],
+    [
+      "C-ambar",
+      "T-verde",
+      "F-rojo",
+      "V-ambar",
+      "J-azul",
+      "C-verde"
+    ]
+  ],
+  "capacities": [
+    3,
+    3,
+    6
+  ]
+}

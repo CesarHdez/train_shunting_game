@@ -1,45 +1,21 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-.venv/
-.env
-
-# IDEs
-.vscode/
-.idea/
-
-# Agentic
-.gemini/
-.claude/
-skills-lock.json
-
-# Firebase local cache
-.firebase/
-
-# Node
+# Dependencias
 node_modules/
 
-# Game dev artifacts
-scores.json
+# Salidas de compilación y previsualización (se regeneran con `npx expo export`)
+app/.webdist/
+app/dist/
+app/web-build/
+.expo/
+
+# Capturas de verificación generadas por tools/*.mjs — desechables, pesan mucho
+app/tools/shots/
+
+# Configuración local de Claude Code (por máquina, no del proyecto)
+.claude/settings.local.json
+
+# Logs y basura del sistema
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+Thumbs.db

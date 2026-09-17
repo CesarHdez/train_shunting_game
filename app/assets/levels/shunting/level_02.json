@@ -1,0 +1,37 @@
+{
+  "id": 2,
+  "tracks": [
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "C",
+      "B",
+      "A",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C"
+  ],
+  "description": "Nivel 2: Tutorial. Invierte el orden de los vagones.",
+  "capacity": 6,
+  "minMoves": 5
+}

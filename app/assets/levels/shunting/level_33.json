@@ -1,0 +1,68 @@
+{
+  "id": 33,
+  "tracks": [
+    [
+      "F",
+      "D",
+      "B",
+      "A",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "G",
+      "C",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "H",
+      "E",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "targetSequence": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H"
+  ],
+  "description": "Nivel 33: A enterrada en el índice 3. Necesitas maniobrar con cuidado.",
+  "capacity": 8,
+  "minMoves": null
+}
