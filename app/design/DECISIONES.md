@@ -77,13 +77,27 @@ aunque el encargo que estés ejecutando no lo mencione.
 
 ## 5. Vías
 
-- **Los rieles llegan y sobrepasan los bordes del cuadro** en todas las filas,
-  para que se lea continuidad. Ninguna vía puede terminar flotando dentro del
-  encuadre.
+La regla depende de si por ese extremo **circula la locomotora**:
+
+- **Extremo CON peine (por donde se mueve la locomotora): los rieles llegan y
+  sobrepasan el borde del cuadro**, para que se lea continuidad. Ninguna vía
+  puede terminar flotando ahí dentro del encuadre.
 - La extensión se **deriva de la proyección de la cámara** (anclada a la fila
   más lejana, que es la que más distancia necesita), nunca con una constante
   fija que funcione solo en un nivel.
-- Vale para **ambos modos**.
+- **Extremo SIN peine (vía muerta): la vía TERMINA dentro del cuadro**, a la
+  medida de la **capacidad** del nivel (justo después del último hueco de
+  vagón, el mismo número que el HUD muestra como "0/6"), y lleva una **topera**
+  en la punta. El interruptor es `hasRightLoco`: el peine izquierdo siempre
+  existe, así que cuando no hay locomotora derecha, el extremo derecho es la
+  vía muerta. Con dos peines, ambos extremos siguen saliendo del cuadro.
+- **La topera** (término correcto; una "espuela" es otra cosa) se dibuja como
+  las rígidas reales: bloque en el final del carril, franja de alta visibilidad
+  y **dos topes redondos a la misma altura que los de los vagones**, con una
+  viga intermedia. Colores de la paleta de la hora, nunca fijos.
+- El contador de capacidad debe quedar **después** de la topera, sin solaparse.
+- Lo de los bordes vale para **ambos modos**; la regla de vía muerta está
+  implementada solo en Maniobras (en Clasificación está pendiente de decidir).
 
 ## 6. Sonido y vibración
 
@@ -187,3 +201,23 @@ Añadidos tras las primeras rondas. Valen igual que el resto: no deshacer.
   botones son hermanos en una fila con envoltura centrada; nada de contenedores
   anidados sin dirección de flujo. Ancho del cartel hasta 640 pt con márgenes, y
   columnas del ranking de ancho fijo para que no se parta el texto.
+
+---
+
+## 13. Bypass de progresión — SOLO PARA PRUEBAS
+
+Para verificar los niveles altos (la locomotora derecha aparece a partir del
+**nivel 51**) existe una siembra de progreso que vive **exclusivamente** en
+`tools/seedProgress.mjs`.
+
+- **Nunca debe existir un equivalente dentro de `src/`.** Nada de este bypass
+  viaja en el paquete de la app, así que un jugador no puede alcanzarlo. Un
+  interruptor interno, aunque estuviera oculto, sí viajaría.
+- Funciona sembrando `localStorage` antes de que cargue la app (AsyncStorage en
+  web usa la clave cruda `train_scores_v2`). Un nivel cuenta como completado con
+  tener una entrada, y las entradas **sin** campo `_h` se aceptan tal cual, así
+  que no hay que replicar el hash de integridad.
+- Cada sección pide 8 de 10 niveles completados, así que sembrar 1..50 abre
+  hasta la sección 6.
+- Está **apagado por defecto**: sin la variable `SEED_LEVELS` no hace nada.
+  Uso: `SEED_LEVELS=50 LEVEL='NIVEL 51' node tools/webshot.mjs`.

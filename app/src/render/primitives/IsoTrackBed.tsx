@@ -25,6 +25,7 @@ import React, { useMemo } from 'react';
 import { Circle, DashPathEffect, Group, Path } from '@shopify/react-native-skia';
 
 import type { TimeOfDayPalette } from '../../../design/tokens';
+import { BufferStop } from './BufferStop';
 
 export interface IsoTrackBedProps {
   /** Plane v of each row's rail centreline, far → near. */
@@ -40,6 +41,15 @@ export interface IsoTrackBedProps {
   trunkX: number;
   ballastWidth: number;
   palette: TimeOfDayPalette;
+  /**
+   * When set, the straight stub TERMINATES here instead of continuing to
+   * `stubEndX` as a bleed — caller passes the same value for both (see
+   * ShuntingBoard.tsx) and this additionally caps every row with a
+   * BufferStop rather than letting the run imply it keeps going off-frame.
+   * `undefined` (the default) preserves the original bleed-past-the-edge
+   * behaviour untouched.
+   */
+  deadEndX?: number;
 }
 
 /**
@@ -75,6 +85,7 @@ function IsoTrackBedImpl({
   trunkX,
   ballastWidth,
   palette,
+  deadEndX,
 }: IsoTrackBedProps) {
   const gauge = ballastWidth * 0.262;
   const railWidth = Math.max(0.8, ballastWidth * 0.086);
@@ -158,6 +169,13 @@ function IsoTrackBedImpl({
         <Circle key={`n${i}`} cx={fanEndX} cy={rowY} r={fanR} color={palette.track.node} />
       ))}
       <Circle cx={convX} cy={convY} r={convR} color={palette.track.node} />
+
+      {/* Dead end: this side has no locomotive throat, so every row is capped
+          with a buffer stop instead of implying it keeps running off-frame. */}
+      {typeof deadEndX === 'number' &&
+        rows.map((rowY, i) => (
+          <BufferStop key={`d${i}`} x={deadEndX} y={rowY} ballastWidth={ballastWidth} palette={palette} />
+        ))}
     </Group>
   );
 }

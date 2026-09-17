@@ -785,8 +785,11 @@ export function ShuntingBoard({
               convX={layout.peineLeft.convX}
               convY={layout.peineLeft.convY}
               fanEndX={layout.peineLeft.fanEndX}
-              stubEndX={layout.peineRight ? layout.peineRight.fanEndX : layout.edgeRightX}
+              stubEndX={
+                layout.peineRight ? layout.peineRight.fanEndX : layout.deadEndRightX ?? layout.edgeRightX
+              }
               trunkX={layout.edgeLeftX}
+              deadEndX={layout.peineRight ? undefined : layout.deadEndRightX ?? undefined}
               ballastWidth={ballastWidth}
               palette={palette}
             />

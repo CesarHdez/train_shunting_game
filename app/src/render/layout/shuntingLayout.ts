@@ -33,7 +33,15 @@
 
 import { layout as L, spacing, isoCameraTokens } from '../../../design/tokens';
 import { createIsoCamera, planeEdgeU, planeSizeForViewport, type IsoCamera } from '../iso/isoCamera';
-import { clamp, fitCarDims, inRectPad, type Rect } from './common';
+import {
+  BUFFER_STOP_BADGE_GAP,
+  BUFFER_STOP_DEPTH,
+  BUFFER_STOP_GAP,
+  clamp,
+  fitCarDims,
+  inRectPad,
+  type Rect,
+} from './common';
 
 export interface ShuntingLayoutParams {
   trackCount: number;
@@ -137,6 +145,18 @@ export interface ShuntingLayout {
    */
   edgeLeftX: number;
   edgeRightX: number;
+
+  /**
+   * Plane u the right-hand track bed TERMINATES at — a buffer stop, not a
+   * bleed off the frame — when there is no right locomotive throat for the
+   * cars to run through. `null` when `hasRightLoco` (that side always keeps
+   * running off-frame per the approved rule; see the module doc comment).
+   * Derived from `trackSX + trackWidth` (exactly where the car columns end,
+   * the same extent the "n/capacity" badge is keyed off), not from
+   * `edgeRightX`'s camera-projection bleed math, which answers a different
+   * question (how far a CONTINUING run must reach to clear the frame).
+   */
+  deadEndRightX: number | null;
 
   /** Hit-test a tap in SCREEN dp. */
   hitTest: (x: number, y: number) => ShuntingHit | null;
@@ -370,7 +390,15 @@ export function computeShuntingLayout(params: ShuntingLayoutParams): ShuntingLay
     return { u: r.x + r.width / 2, v: r.y, width: locoBodyWidth, height: locoBodyHeight };
   };
 
-  const badgeAnchor = (i: number) => ({ u: trackSX + trackWidth + rightReserved * 0.3, v: rowV(i) });
+  // Only meaningful (i.e. actually drawn) when !hasRightLoco — that is the
+  // sole branch that renders the badge at all (ShuntingBoard.tsx's
+  // ShuntingRow) — so it is keyed off the dead-end's own footprint rather
+  // than a fraction of the reserved column: the badge sits just past the
+  // buffer stop, never past it, regardless of how that column is sized.
+  const badgeAnchor = (i: number) => ({
+    u: trackSX + trackWidth + BUFFER_STOP_GAP + BUFFER_STOP_DEPTH + BUFFER_STOP_BADGE_GAP,
+    v: rowV(i),
+  });
 
   /** The lit stretch of track for a legal target — as wide as its own bed. */
   const markerRect = (i: number, _side: 'left' | 'right'): Rect => ({
@@ -414,6 +442,15 @@ export function computeShuntingLayout(params: ShuntingLayoutParams): ShuntingLay
   // since perspective compresses the far edge the most.
   const edgeLeftX = planeEdgeU(camera, -width * EDGE_BLEED_FRACTION);
   const edgeRightX = planeEdgeU(camera, width * (1 + EDGE_BLEED_FRACTION));
+
+  // The left throat always exists (there is always a left locomotive), so
+  // the only side that can ever dead-end is the right one, and only when
+  // there is no right throat for it to hand off to — i.e. exactly when
+  // `peineRight` above is null. Sized from the car columns' own extent
+  // (`trackSX + trackWidth`, capacity-derived) plus the buffer stop's own
+  // fixed footprint — see BUFFER_STOP_* in layout/common.ts — never from
+  // `edgeRightX`'s bleed-past-the-frame math.
+  const deadEndRightX = hasRightLoco ? null : trackSX + trackWidth + BUFFER_STOP_GAP + BUFFER_STOP_DEPTH;
 
   // ── 7. Hit-testing, in screen dp ────────────────────────────────────────
 
@@ -503,6 +540,7 @@ export function computeShuntingLayout(params: ShuntingLayoutParams): ShuntingLay
     peineRight,
     edgeLeftX,
     edgeRightX,
+    deadEndRightX,
     hitTest,
   };
 }

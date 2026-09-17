@@ -4,6 +4,7 @@
 import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
+import { seedProgress } from './seedProgress.mjs';
 
 const URL = process.env.APP_URL || 'http://localhost:8090';
 const OUT = path.join(process.cwd(), 'tools', 'shots');
@@ -19,6 +20,8 @@ await page.setViewport({
   width: +(process.env.VW || 844), height: +(process.env.VH || 390),
   deviceScaleFactor: +(process.env.DSF || 2), isMobile: true, hasTouch: true,
 });
+const seeded = await seedProgress(page);
+if (seeded) console.log(`progreso sembrado (solo pruebas): niveles 1-${seeded}`);
 await page.evaluateOnNewDocument(() => {
   window.__errs = [];
   window.addEventListener('error', (e) => window.__errs.push(String(e.message)));

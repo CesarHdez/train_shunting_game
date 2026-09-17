@@ -113,24 +113,31 @@ describe('track bed reaches past the canvas edges', () => {
         }
       });
 
-      it('extends the right-hand bed past the right edge, at the near row, far row and convergence node', () => {
-        // With no right throat this is the cars' own stub; with one it is
-        // that throat's trunk — either way it is drawn at `edgeRightX`.
-        const convY = l.peineRight ? l.peineRight.convY : l.peineLeft.convY;
-        for (const v of [farV, nearV, convY]) {
-          expect(l.camera.project(l.edgeRightX, v).x).toBeGreaterThanOrEqual(l.contentWidth - 0.01);
-        }
-      });
-
-      if (!l.hasRightLoco) {
-        it('reaches further right than the old fixed stub end (badge column edge)', () => {
-          const oldStubEndX = l.trackSX + l.trackWidth + l.badgeColumnWidth;
-          expect(l.edgeRightX).toBeGreaterThan(oldStubEndX);
+      if (l.hasRightLoco) {
+        it('extends the right throat trunk past the right edge, at the near row, far row and convergence node', () => {
+          const convY = l.peineRight ? l.peineRight.convY : l.peineLeft.convY;
+          for (const v of [farV, nearV, convY]) {
+            expect(l.camera.project(l.edgeRightX, v).x).toBeGreaterThanOrEqual(l.contentWidth - 0.01);
+          }
+        });
+      } else {
+        it('terminates the right-hand bed inside the frame instead of bleeding past the edge', () => {
+          expect(l.deadEndRightX).not.toBeNull();
+          const deadEndRightX = l.deadEndRightX as number;
+          // Sized off the capacity-derived car extent, a little past the
+          // last car column — not off at the camera-bleed extent.
+          expect(deadEndRightX).toBeGreaterThan(l.trackSX + l.trackWidth);
+          expect(deadEndRightX).toBeLessThan(l.trackSX + l.trackWidth + l.badgeColumnWidth);
+          for (const v of [farV, nearV]) {
+            const x = l.camera.project(deadEndRightX, v).x;
+            expect(x).toBeGreaterThan(0);
+            expect(x).toBeLessThan(l.contentWidth - 0.01);
+          }
         });
       }
 
       it('does not move any hit-test target', () => {
-        // The extension is drawing-only: hitTest never reads edgeLeftX/edgeRightX.
+        // The extension is drawing-only: hitTest never reads edgeLeftX/edgeRightX/deadEndRightX.
         for (const i of [0, l.trackCount - 1]) {
           for (const j of [0, l.capacity - 1]) {
             const box = spriteBox(l, l.carBillboard(i, j));
@@ -141,6 +148,34 @@ describe('track bed reaches past the canvas edges', () => {
       });
     });
   }
+});
+
+describe('dead-end rule follows hasRightLoco, not level density', () => {
+  it('a level WITH a right loco keeps both ends bleeding past the frame (deadEndRightX is null)', () => {
+    const l = build(DENSEST); // hasRightLoco: true
+    expect(l.deadEndRightX).toBeNull();
+  });
+
+  it('a level WITHOUT a right loco dead-ends the right side regardless of track count or capacity', () => {
+    for (const level of [
+      { trackCount: 3, capacity: 6, hasRightLoco: false },
+      { trackCount: 7, capacity: 4, hasRightLoco: false },
+      { trackCount: 7, capacity: 13, hasRightLoco: false },
+      { trackCount: 1, capacity: 1, hasRightLoco: false },
+    ]) {
+      const l = build(level);
+      expect(l.deadEndRightX).not.toBeNull();
+      expect(l.deadEndRightX as number).toBeGreaterThan(l.trackSX + l.trackWidth);
+    }
+  });
+
+  it("the badge anchor sits past the buffer stop, never inside or before it", () => {
+    const l = build(SIMPLE);
+    const deadEndRightX = l.deadEndRightX as number;
+    for (let i = 0; i < l.trackCount; i++) {
+      expect(l.badgeAnchor(i).u).toBeGreaterThan(deadEndRightX);
+    }
+  });
 });
 
 describe('scroll fallback', () => {

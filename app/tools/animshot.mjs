@@ -3,6 +3,7 @@
 import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
+import { seedProgress } from './seedProgress.mjs';
 
 const URL = process.env.APP_URL || 'http://localhost:8090';
 const OUT = path.join(process.cwd(), 'tools', 'shots');
@@ -17,7 +18,15 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 844, height: 390, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await page.setViewport({
+  width: +(process.env.VW || 844),
+  height: +(process.env.VH || 390),
+  deviceScaleFactor: +(process.env.DSF || 2),
+  isMobile: true,
+  hasTouch: true,
+});
+const seeded = await seedProgress(page);
+if (seeded) console.log(`progreso sembrado (solo pruebas): niveles 1-${seeded}`);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function tapText(re, t = 10000) {
   const s = Date.now();
