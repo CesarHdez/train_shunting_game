@@ -12,40 +12,12 @@
  * before the yard so it can never occlude a car.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Circle, Group, LinearGradient, Path, RadialGradient, Rect, vec } from '@shopify/react-native-skia';
-import { Easing, useDerivedValue, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 import type { TimeOfDayPalette } from '../../../design/tokens';
-
-const REF_W = 960;
-const REF_H = 200;
-
-/** Reference hill silhouette, in 960×200 space. */
-const HILL = [
-  [0, 168],
-  [130, 128],
-  [260, 158],
-  [390, 132],
-  [560, 168],
-  [700, 140],
-  [860, 164],
-  [960, 146],
-] as const;
-
-/** Reference star field, in 960×200 space: [x, y, r]. */
-const STARS = [
-  [80, 28, 1.4],
-  [150, 54, 1],
-  [260, 22, 1.2],
-  [360, 46, 1],
-  [470, 16, 1.4],
-  [560, 42, 1],
-  [680, 24, 1.2],
-  [770, 52, 1],
-  [860, 18, 1.4],
-  [920, 58, 1],
-] as const;
+import { HILL, REF_H, REF_W, STARS } from './scenery/refBand';
+import { useTwinkle } from './scenery/useTwinkle';
 
 export interface IsoSkyProps {
   width: number;
@@ -66,14 +38,9 @@ function IsoSkyImpl({ width, horizonY, palette }: IsoSkyProps) {
   }, [sx, sy, width, band]);
 
   // A single shared breath for the whole star field: ten independent loops
-  // would be ten Reanimated animations for a detail nobody counts.
-  const twinkle = useSharedValue(0);
-  useEffect(() => {
-    if (!scenery.stars) return;
-    twinkle.value = withRepeat(withTiming(1, { duration: 1700, easing: Easing.inOut(Easing.sin) }), -1, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenery.stars]);
-  const starOpacity = useDerivedValue(() => 0.5 + twinkle.value * 0.5, [twinkle]);
+  // would be ten Reanimated animations for a detail nobody counts. Shared
+  // with IsoScenery's lamp-post glow — see useTwinkle's doc comment.
+  const starOpacity = useTwinkle(!!scenery.stars);
 
   return (
     <Group>
@@ -98,33 +65,15 @@ function IsoSkyImpl({ width, horizonY, palette }: IsoSkyProps) {
 
       <Path path={hillPath} color={scenery.hill} opacity={scenery.hillOpacity} />
 
-      {/* Water tower (left) */}
-      <Group color={scenery.structure}>
-        <Rect x={112 * sx} y={76 * sy} width={26 * sx} height={88 * sy} />
-        <Rect x={100 * sx} y={60 * sy} width={50 * sx} height={20 * sy} />
-        <Rect x={123 * sx} y={34 * sy} width={Math.max(1, 3 * sx)} height={26 * sy} />
-        {/* Signal gantry (right) */}
-        <Rect x={800 * sx} y={102 * sy} width={52 * sx} height={14 * sy} />
-        <Rect x={806 * sx} y={114 * sy} width={Math.max(1, 6 * sx)} height={48 * sy} />
-        <Rect x={840 * sx} y={114 * sy} width={Math.max(1, 6 * sx)} height={48 * sy} />
-      </Group>
-
-      {scenery.lampLight && (
-        <Group color={scenery.lampLight}>
-          {palette.key === 'noche' ? (
-            <Group>
-              {[106, 120, 134].map((x, i) => (
-                <Circle key={`l${i}`} cx={x * sx} cy={64 * sy} r={Math.max(1, 4 * sy)} />
-              ))}
-              {[815, 829, 843].map((x, i) => (
-                <Circle key={`r${i}`} cx={x * sx} cy={106 * sy} r={Math.max(1, 4 * sy)} />
-              ))}
-            </Group>
-          ) : (
-            <Rect x={106 * sx} y={65 * sy} width={38 * sx} height={10 * sy} opacity={0.75} />
-          )}
-        </Group>
-      )}
+      {/* The water tower + signal gantry that used to live here were
+          retired: they occupied ref-band x=100-150 / x=800-852, which fully
+          overlaps SCENERY_SLOTS.left/right (60-260 / 700-900) from
+          scenery/refBand.ts — every per-section prop rendered on top of one
+          of them, producing a merged double silhouette on all 11 sections
+          (caught by QA). The per-section kit's own structures (control
+          tower, gantry crane, warehouse...) now cover this identity role
+          per recipe; hill + fence remain the only two always-on constants
+          (scenery-spec.md §2.1). */}
 
       {/* Warm haze pooling on the horizon line. */}
       <Rect x={0} y={band * 0.65} width={width} height={band * 0.35}>

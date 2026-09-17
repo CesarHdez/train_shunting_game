@@ -102,6 +102,21 @@ export interface ShuntingLayout {
   locoBodyHeight: number;
   /** Ballast stroke width for the track bed, in plane units. */
   ballastWidth: number;
+  /**
+   * Plane v the foreground apron (scenery Zone B) starts at — the nearest
+   * row's own ballast band bottom edge, i.e. `rowV(trackCount - 1) +
+   * rowHeight / 2`. See design/scenery-spec.md §1.3 R2/R5 and §5.
+   */
+  foregroundOriginY: number;
+  /**
+   * How much plane depth is left between the row block and the plane's own
+   * far edge, on EACH side (they're always equal by construction — see
+   * `computeShuntingLayout`'s `topOffset`/`slack` derivation). Scenery Zone B
+   * gates each foreground prop's render on this (`minMarginPlane`,
+   * design/scenery-spec.md §1.3 R3 / §2.3) rather than ever shrinking a
+   * prop to fit.
+   */
+  foregroundMarginPlane: number;
   /** Plane-space width reserved to the right of the cars (loco column or badge). */
   badgeColumnWidth: number;
   /** Font size for in-canvas badges, in local units. */
@@ -252,6 +267,12 @@ export function computeShuntingLayout(params: ShuntingLayoutParams): ShuntingLay
   // apron of ballast in front of it that sells the depth.
   const topOffset = topPad + Math.max(0, planeHeight - topPad * 2 - blockHeight) * 0.5;
   const rowV = (i: number) => topOffset + rowHeight / 2 + i * rowPitch;
+  // Both margins (far edge → first row, last row → near edge) are equal by
+  // construction — see the module doc comment's §1.2 worked table — so this
+  // single formula answers "how much room is left in the foreground apron"
+  // exactly like `topOffset` answers it for the far one.
+  const foregroundOriginY = trackCount > 0 ? rowV(trackCount - 1) + rowHeight / 2 : rowV(0);
+  const foregroundMarginPlane = Math.max(0, planeHeight - (topOffset + blockHeight));
 
   // ── 3. Columns, in plane space ──────────────────────────────────────────
   //
@@ -523,6 +544,8 @@ export function computeShuntingLayout(params: ShuntingLayoutParams): ShuntingLay
     locoBodyWidth,
     locoBodyHeight,
     ballastWidth,
+    foregroundOriginY,
+    foregroundMarginPlane,
     badgeColumnWidth: rightReserved,
     badgeSize,
     labelSize,

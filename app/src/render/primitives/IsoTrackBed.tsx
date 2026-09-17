@@ -93,6 +93,22 @@ function IsoTrackBedImpl({
   const fanR = ballastWidth * 0.143;
   const tieDash = useMemo(() => [ballastWidth * 0.167, ballastWidth * 0.333], [ballastWidth]);
 
+  // Ballast gravel stipple: two more strokes of the exact same row-run path
+  // (`runs`, below), dashed at stone-sized, mutually-incommensurate periods
+  // so the two layers drift in and out of phase along the path instead of
+  // lining up into a barcode. Dash ON-length is kept close to strokeWidth on
+  // both layers (rather than much shorter, as a thin cross-tie dash would
+  // be) so each dash reads as a roundish pebble, not a full-width slat —
+  // that's what keeps this from being mistaken for more sleeper ties.
+  // Both are defined as ratios of `ballastWidth`, never the path's own
+  // length, so stone size stays constant whether a row is a short 13-car
+  // stub or a long two-track bleed.
+  const stoneHiWidth = ballastWidth * 0.4;
+  const stoneLoWidth = ballastWidth * 0.26;
+  const stoneHiDash = useMemo(() => [ballastWidth * 0.3, ballastWidth * 0.22], [ballastWidth]);
+  const stoneLoDash = useMemo(() => [ballastWidth * 0.16, ballastWidth * 0.13], [ballastWidth]);
+  const stoneLoPhase = ballastWidth * 0.09;
+
   const runs = useMemo(
     () => rows.map((rowY) => buildRunPath(convX, convY, fanEndX, rowY, stubEndX)),
     [rows, convX, convY, fanEndX, stubEndX]
@@ -127,6 +143,38 @@ function IsoTrackBedImpl({
           strokeJoin="round"
           color={palette.track.ballast}
         />
+      ))}
+
+      {/* Gravel stipple: two dash-stroked passes over the same run path,
+          drawn before the sleeper ties so the wooden ties still read as
+          sitting on top of the stones, not buried under them. */}
+      {runs.map((d, i) => (
+        <Path
+          key={`sh${i}`}
+          path={d}
+          style="stroke"
+          strokeWidth={stoneHiWidth}
+          strokeCap="round"
+          strokeJoin="round"
+          color={palette.track.ballastStoneHi}
+          opacity={0.6}
+        >
+          <DashPathEffect intervals={stoneHiDash} />
+        </Path>
+      ))}
+      {runs.map((d, i) => (
+        <Path
+          key={`sl${i}`}
+          path={d}
+          style="stroke"
+          strokeWidth={stoneLoWidth}
+          strokeCap="round"
+          strokeJoin="round"
+          color={palette.track.ballastStoneLo}
+          opacity={0.4}
+        >
+          <DashPathEffect intervals={stoneLoDash} phase={stoneLoPhase} />
+        </Path>
       ))}
 
       {/* Sleeper texture: a dashed stroke of the same width over the ballast. */}

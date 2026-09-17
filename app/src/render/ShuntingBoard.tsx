@@ -34,6 +34,8 @@ import { usePalette } from './iso/timeOfDay';
 import { useShuntingAnimation } from './motion/useShuntingAnimation';
 import type { ShuntingMoveAnim } from './motion/detectMove';
 import { pushedPositionAtT, railPositionAtT, type ShuntRailPlan } from './motion/railPath';
+import { IsoSceneryForegroundBillboard, IsoSceneryForegroundGround, IsoSceneryZoneA } from './primitives/IsoScenery';
+import { sceneryRecipeIndexForLevel } from './primitives/scenery/recipes';
 import { IsoSky } from './primitives/IsoSky';
 import { IsoTrackBed } from './primitives/IsoTrackBed';
 import { IsoWagon } from './primitives/IsoWagon';
@@ -593,6 +595,16 @@ const EMPTY_HIDDEN_COLS: Set<number> = new Set();
 export interface ShuntingBoardExtraProps {
   /** Pins a lighting pass, bypassing the stored preference (previews/tests). */
   timeOfDay?: TimeOfDay | null;
+  /**
+   * 0-based shunting section index driving the yard's scenery recipe (see
+   * design/scenery-spec.md §2.2 and primitives/scenery/recipes.ts). Defaults
+   * to the section derived from `state.levelNum` (§5's own recommended
+   * wiring, reusing `SHUNTING_SECTION_SIZE` from controller/sections.ts) so
+   * callers that don't pass it — existing screenshot/test harnesses — still
+   * get a sensible, level-accurate backdrop instead of crashing or always
+   * showing Sección 1.
+   */
+  sceneryRecipe?: number;
 }
 
 export function ShuntingBoard({
@@ -606,6 +618,7 @@ export function ShuntingBoard({
   onAnimationComplete,
   showCelebration,
   timeOfDay,
+  sceneryRecipe,
 }: ShuntingBoardProps & ShuntingBoardExtraProps) {
   const palette = usePalette(timeOfDay);
 
@@ -620,6 +633,8 @@ export function ShuntingBoard({
       }),
     [state.tracks.length, state.capacity, state.hasRightLoco, width, height]
   );
+
+  const recipeIndex = sceneryRecipe ?? sceneryRecipeIndexForLevel(state.levelNum);
 
   const { move, progress, railPlan, settle, flash, boardFade } = useShuntingAnimation(
     state,
@@ -771,6 +786,12 @@ export function ShuntingBoard({
         </Fill>
 
         <IsoSky width={contentWidth} horizonY={layout.camera.horizonY} palette={palette} />
+        <IsoSceneryZoneA
+          width={contentWidth}
+          horizonY={layout.camera.horizonY}
+          recipeIndex={recipeIndex}
+          palette={palette}
+        />
 
         {/* Wrapped so a detected full-board RESTART can play a cheap opacity
             settle instead of a per-car animation — no-op (opacity 1) for
@@ -779,6 +800,13 @@ export function ShuntingBoard({
           {/* ── GROUND: everything that lies ON the tilted plane ── */}
           <Group matrix={groundMatrix}>
             <GroundPlane layout={layout} palette={palette} />
+            <IsoSceneryForegroundGround
+              foregroundOriginY={layout.foregroundOriginY}
+              foregroundMarginPlane={layout.foregroundMarginPlane}
+              centerU={layout.trackSX + layout.trackWidth / 2}
+              recipeIndex={recipeIndex}
+              palette={palette}
+            />
 
             <IsoTrackBed
               rows={trackVs}
@@ -841,6 +869,21 @@ export function ShuntingBoard({
               />
             )}
           </Group>
+
+          {/* Foreground silhouette prop (lamp/cabinet/signage/forklift): a
+              SIBLING of the ground matrix group, not a child of it — see
+              IsoScenery.tsx's header for why nesting would double-apply the
+              projective matrix. Drawn before the row billboards, though
+              nothing overlaps it (it sits below the nearest row's own
+              band). */}
+          <IsoSceneryForegroundBillboard
+            camera={layout.camera}
+            foregroundOriginY={layout.foregroundOriginY}
+            foregroundMarginPlane={layout.foregroundMarginPlane}
+            centerU={layout.trackSX + layout.trackWidth / 2}
+            recipeIndex={recipeIndex}
+            palette={palette}
+          />
 
           {/* ── BILLBOARDS: far row first so near rows occlude ── */}
           {state.tracks.map((cars, i) => (

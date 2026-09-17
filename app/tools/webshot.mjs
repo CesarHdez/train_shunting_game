@@ -12,6 +12,12 @@ const page = await browser.newPage();
 await page.setViewport({ width: +(process.env.VW || 390), height: +(process.env.VH || 844), deviceScaleFactor: +(process.env.DSF || 2), isMobile: true, hasTouch: true });
 const seeded = await seedProgress(page);
 if (seeded) console.log(`progreso sembrado (solo pruebas): niveles 1-${seeded}`);
+// TOD: pin a time-of-day pass before load (amanecer|mediodia|atardecer|noche) — same
+// storage key useTimeOfDay() reads (see src/render/iso/timeOfDay.ts). Unset = real clock.
+if (process.env.TOD) {
+  await page.evaluateOnNewDocument((v) => { try { localStorage.setItem('train_time_of_day', v); } catch {} }, process.env.TOD);
+  console.log('hora del dia sembrada: ' + process.env.TOD);
+}
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function tapText(re, t = 10000) { const s = Date.now(); while (Date.now() - s < t) { const h = await page.evaluateHandle((p) => { const rx = new RegExp(p, 'i'); const els = [...document.querySelectorAll('div,span,[role="button"],button')].filter((el) => rx.test((el.innerText || '').trim()) && el.offsetParent !== null); els.sort((a, b) => (a.innerText || '').length - (b.innerText || '').length); return els[0] || null; }, re.source || re); const el = h.asElement(); if (el) { const b = await el.boundingBox(); if (b) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); return true; } } await wait(300); } return false; }
 async function tapAria(label, t = 12000) { const s = Date.now(); while (Date.now() - s < t) { const box = await page.evaluate((lb) => { const rx = new RegExp('^' + lb + '($|[^0-9])', 'i'); for (const el of document.querySelectorAll('[aria-label]')) { if (!rx.test(el.getAttribute('aria-label') || '')) continue; const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue; const r = el.getBoundingClientRect(); if (r.width > 2 && r.height > 2 && r.x >= 0 && r.y >= 0) return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; } return null; }, label); if (box) { await page.mouse.click(box.x, box.y); return true; } await wait(300); } return false; }
@@ -24,12 +30,13 @@ if (process.env.STOP === 'settings') {
   const okg = await tapText(/⚙/, 4000);
   if (!okg) { await page.mouse.click(50, 60); } // fallback: top-left gear position
   await wait(1500);
-  await page.screenshot({ path: path.join(OUT, NAME) });
+  const CLIP = process.env.CLIP ? JSON.parse(process.env.CLIP) : undefined;
+  await page.screenshot({ path: path.join(OUT, NAME), clip: CLIP });
   console.log('shot saved (settings): ' + NAME + ' gear=' + okg);
   await browser.close(); process.exit(0);
 }
 await tapText(new RegExp(MODE)); await wait(1800);
-if (process.env.STOP === 'select') { await page.screenshot({ path: path.join(OUT, NAME) }); console.log('shot saved (level-select): ' + NAME); await browser.close(); process.exit(0); }
+if (process.env.STOP === 'select') { const CLIP = process.env.CLIP ? JSON.parse(process.env.CLIP) : undefined; await page.screenshot({ path: path.join(OUT, NAME), clip: CLIP }); console.log('shot saved (level-select): ' + NAME); await browser.close(); process.exit(0); }
 // Scroll the level grid down until the target level card is present, then tap it.
 for (let i = 0; i < 30; i++) {
   // Must be VISIBLE, not merely present: level cards for rows below the fold
@@ -53,6 +60,7 @@ if (process.env.SKIP === '1') {
   await wait(900);
 }
 await wait(1200);
-await page.screenshot({ path: path.join(OUT, NAME) });
+const CLIP = process.env.CLIP ? JSON.parse(process.env.CLIP) : undefined;
+await page.screenshot({ path: path.join(OUT, NAME), clip: CLIP });
 console.log('shot saved: ' + NAME);
 await browser.close();

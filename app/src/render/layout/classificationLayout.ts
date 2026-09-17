@@ -62,6 +62,11 @@ export interface ClassificationLayout {
   rowPitch: number;
   /** Ballast stroke width for the track bed, in plane units. */
   ballastWidth: number;
+  /** Plane v the foreground apron (scenery Zone B) starts at — see the
+   *  identical field in shuntingLayout.ts's ShuntingLayout. */
+  foregroundOriginY: number;
+  /** Plane depth left on each side of the row block — see shuntingLayout.ts. */
+  foregroundMarginPlane: number;
   /** Gutter reserved left of the cars for the arrival selector / VÍA label. */
   gutterWidth: number;
   /** Plane u the gutter's furniture (selector button, VÍA label) is centred on. */
@@ -148,6 +153,13 @@ export function computeClassificationLayout(params: ClassificationLayoutParams):
 
   const arrY = (i: number) => topOffset + rowPitch / 2 + i * rowPitch;
   const clasY = (i: number) => topOffset + rowPitch / 2 + (arrivalsCount + i) * rowPitch + dividerGap;
+
+  // See the identical pair in shuntingLayout.ts for the derivation — both
+  // margins (far edge → first row, last row → near edge) are equal by
+  // construction, so `foregroundMarginPlane` reuses the same formula.
+  const foregroundOriginY =
+    clasifCount > 0 ? clasY(clasifCount - 1) + rowPitch / 2 : arrY(Math.max(0, arrivalsCount - 1)) + rowPitch / 2;
+  const foregroundMarginPlane = Math.max(0, planeHeight - (topOffset + blockHeight));
 
   // ── Columns ─────────────────────────────────────────────────────────────
   const sideMargin = L.sideMargin;
@@ -252,6 +264,8 @@ export function computeClassificationLayout(params: ClassificationLayoutParams):
     clasCarRailY,
     rowPitch,
     ballastWidth,
+    foregroundOriginY,
+    foregroundMarginPlane,
     gutterWidth,
     gutterAnchor,
     gutterThroatEnd,

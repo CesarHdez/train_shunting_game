@@ -56,6 +56,24 @@ export const destinationColors = {
 export type DestinationKey = keyof typeof destinationColors;
 
 /**
+ * Yard-scenery container-stack hues (design/scenery-spec.md §2.4). Fixed
+ * ABSOLUTE pigment shared by every shunting section that includes a
+ * container-stack prop — deliberately NOT time-of-day-varied (the
+ * whole-canvas `atmosphere` bloom/vignette pass already unifies every prop's
+ * mood per hour, see ShuntingBoard.tsx's final Rect) and deliberately NOT the
+ * same values as `destinationColors` above, so a background container is
+ * never mistaken for a wagon-destination cue (scenery-spec.md R5). The one
+ * approved exception is Clasificación's own recipe, which intentionally
+ * reuses `destinationColors` instead of these — see
+ * src/render/primitives/scenery/recipes.ts.
+ */
+export const containerHues = {
+  red: '#c0392b',
+  blue: '#1f5fa8',
+  amber: '#d68a1f',
+} as const;
+
+/**
  * Accessibility redundancy for destinationColors: rojo/verde is the classic
  * red-green colorblind confusion pair, and this game scores purely on
  * fill-color matching. Every destination additionally gets a distinct
@@ -798,7 +816,21 @@ export interface TimeOfDayPalette {
    * plane box) — the lamp-tower spill that only the night pass has.
    */
   groundWashes: readonly { cx: number; cy: number; r: number; color: string }[];
-  track: { ballast: string; sleeper: string; rail: string; node: string };
+  track: {
+    ballast: string;
+    sleeper: string;
+    rail: string;
+    node: string;
+    /**
+     * Ballast gravel stipple (IsoTrackBed.tsx): two extra dashed strokes
+     * reusing the same row-run path, `Hi` the lit facet of a stone and `Lo`
+     * its shadowed underside. Roughly the existing `ballast` lightened
+     * (`Hi`) / darkened (`Lo`) so the stipple stays a texture on the bed
+     * rather than a competing new hue.
+     */
+    ballastStoneHi: string;
+    ballastStoneLo: string;
+  };
   route: { glow: string; dash: string };
   /** In-canvas "n/capacity" badge. */
   badge: { ok: string; full: string };
@@ -935,7 +967,14 @@ export const timeOfDayPalettes: Record<TimeOfDay, TimeOfDayPalette> = {
     sky: { colors: ['#3a3960', '#7a6a92', '#d69a86', '#f3c9a0'], positions: [0, 0.3, 0.58, 1] },
     ground: { colors: ['#8d7c72', '#675a4f', '#423a32'], positions: [0, 0.46, 1] },
     groundWashes: [],
-    track: { ballast: '#4f4038', sleeper: 'rgba(0,0,0,0.26)', rail: '#e9d7c8', node: '#d9c4b2' },
+    track: {
+      ballast: '#4f4038',
+      sleeper: 'rgba(0,0,0,0.26)',
+      rail: '#e9d7c8',
+      node: '#d9c4b2',
+      ballastStoneHi: '#ab9880',
+      ballastStoneLo: '#2e241c',
+    },
     route: { glow: '#ffe6d0', dash: '#ffc9a0' },
     badge: { ok: '#d9c4b2', full: '#ff8a70' },
     marker: { edge: '#7ef0ae', fillHi: 'rgba(126,240,174,0.34)', fillLo: 'rgba(126,240,174,0.05)' },
@@ -981,7 +1020,14 @@ export const timeOfDayPalettes: Record<TimeOfDay, TimeOfDayPalette> = {
     sky: { colors: ['#3f7fc4', '#7fb3e0', '#cfe4f0'], positions: [0, 0.42, 1] },
     ground: { colors: ['#b7ac96', '#948a76', '#6c6350'], positions: [0, 0.46, 1] },
     groundWashes: [],
-    track: { ballast: '#645844', sleeper: 'rgba(0,0,0,0.22)', rail: '#fdfefe', node: '#efe9dc' },
+    track: {
+      ballast: '#645844',
+      sleeper: 'rgba(0,0,0,0.22)',
+      rail: '#fdfefe',
+      node: '#efe9dc',
+      ballastStoneHi: '#c9bb9c',
+      ballastStoneLo: '#40382a',
+    },
     route: { glow: '#1b2a22', dash: '#ffd94f' },
     badge: { ok: '#0e2436', full: '#a32217' },
     marker: { edge: '#17784a', fillHi: 'rgba(23,120,74,0.34)', fillLo: 'rgba(23,120,74,0.05)' },
@@ -1033,7 +1079,14 @@ export const timeOfDayPalettes: Record<TimeOfDay, TimeOfDayPalette> = {
     sky: { colors: ['#2a1630', '#5b2f3c', '#b8603a', '#f0a95c'], positions: [0, 0.34, 0.62, 1] },
     ground: { colors: ['#7a6450', '#5a4839', '#3b2f26'], positions: [0, 0.46, 1] },
     groundWashes: [],
-    track: { ballast: '#4a3b2e', sleeper: 'rgba(0,0,0,0.28)', rail: '#ffd9a0', node: '#e8c9a0' },
+    track: {
+      ballast: '#4a3b2e',
+      sleeper: 'rgba(0,0,0,0.28)',
+      rail: '#ffd9a0',
+      node: '#e8c9a0',
+      ballastStoneHi: '#a4886a',
+      ballastStoneLo: '#2c221a',
+    },
     route: { glow: '#ffe6a6', dash: '#ffcf6b' },
     badge: { ok: '#e8c9a0', full: '#ff7a5c' },
     marker: { edge: '#7ef0ae', fillHi: 'rgba(126,240,174,0.34)', fillLo: 'rgba(126,240,174,0.05)' },
@@ -1082,7 +1135,14 @@ export const timeOfDayPalettes: Record<TimeOfDay, TimeOfDayPalette> = {
       { cx: 0.05, cy: 0, r: 0.62, color: 'rgba(255,196,120,0.16)' },
       { cx: 0.95, cy: 0, r: 0.62, color: 'rgba(255,196,120,0.16)' },
     ],
-    track: { ballast: '#1d2735', sleeper: 'rgba(0,0,0,0.35)', rail: '#9fc3ea', node: '#cfe2f6' },
+    track: {
+      ballast: '#1d2735',
+      sleeper: 'rgba(0,0,0,0.35)',
+      rail: '#9fc3ea',
+      node: '#cfe2f6',
+      ballastStoneHi: '#6b7f9a',
+      ballastStoneLo: '#10161f',
+    },
     route: { glow: '#8ef7ff', dash: '#8ef7ff' },
     badge: { ok: '#7fa8d6', full: '#ff6b6b' },
     marker: { edge: '#7ef0ae', fillHi: 'rgba(126,240,174,0.40)', fillLo: 'rgba(126,240,174,0.06)' },

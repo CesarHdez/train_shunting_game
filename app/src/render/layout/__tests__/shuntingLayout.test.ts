@@ -238,3 +238,39 @@ describe('hit-testing', () => {
     expect(l.hitTest(-50, -50)).toBeNull();
   });
 });
+
+// design/scenery-spec.md §1.3 R2/R3 and §2.3: the foreground apron scenery
+// gate. These check the two extremes the spec's own §1.2 worked table names
+// explicitly — a sparse 2-track level (comfortable margin, every foreground
+// prop fits) and the densest 7-track/13-capacity/both-throats level (margin
+// bottoms out at the ~12-unit floor, every foreground prop must be skipped).
+describe('foregroundMarginPlane (scenery Zone B gating)', () => {
+  it('is always non-negative and matches R2: foregroundOriginY sits at the last row´s own band bottom', () => {
+    for (const level of [SIMPLE, DENSEST, { trackCount: 1, capacity: 1, hasRightLoco: false }]) {
+      const l = build(level);
+      expect(l.foregroundMarginPlane).toBeGreaterThanOrEqual(0);
+      expect(l.foregroundOriginY).toBeCloseTo(l.rowV(l.trackCount - 1) + l.rowHeight / 2, 6);
+    }
+  });
+
+  it('gives a sparse 2-track level a comfortable margin — every foreground prop\'s floor clears', () => {
+    const l = build({ trackCount: 2, capacity: 4, hasRightLoco: false });
+    // §2.3's floors, highest first (forklift).
+    expect(l.foregroundMarginPlane).toBeGreaterThanOrEqual(34);
+  });
+
+  it('bottoms the densest 7×13 both-throats level out near the topPad floor — every foreground prop must be skipped', () => {
+    const l = build(DENSEST);
+    // spacing.md = 12 (see design/tokens.ts) is the guaranteed floor per the
+    // module doc's `topOffset` derivation; §2.3's cheapest prop (bush clump)
+    // needs 16, so even that one must be skipped here.
+    expect(l.foregroundMarginPlane).toBeLessThan(16);
+    expect(l.foregroundMarginPlane).toBeGreaterThanOrEqual(0);
+  });
+
+  it('never depends on hasRightLoco — only on how tall the row block is', () => {
+    const withRightLoco = build({ trackCount: 4, capacity: 6, hasRightLoco: true });
+    const withoutRightLoco = build({ trackCount: 4, capacity: 6, hasRightLoco: false });
+    expect(withRightLoco.foregroundMarginPlane).toBeCloseTo(withoutRightLoco.foregroundMarginPlane, 6);
+  });
+});

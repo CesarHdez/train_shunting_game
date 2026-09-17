@@ -30,6 +30,7 @@ import { usePalette } from './iso/timeOfDay';
 import { useClassificationAnimation } from './motion/useClassificationAnimation';
 import type { ClassificationMoveAnim } from './motion/detectMove';
 import { buildPushWaypoints, getPosAt } from './motion/waypoints';
+import { IsoSceneryZoneA } from './primitives/IsoScenery';
 import { IsoSky } from './primitives/IsoSky';
 import { IsoTrackBed } from './primitives/IsoTrackBed';
 import { PushMarker } from './primitives/PushMarker';
@@ -519,6 +520,17 @@ export function ClassificationBoard({
         </Fill>
 
         <IsoSky width={contentWidth} horizonY={layout.camera.horizonY} palette={palette} />
+        {/* Fixed "Patio de Clasificación" recipe (design/scenery-spec.md §2.2's
+            final row) — no Zone B/foreground pick here: R5 keeps the
+            destinationColors-hued container stack strictly sky-band/
+            background-only, never near enough the row band to be mistaken
+            for a wagon. */}
+        <IsoSceneryZoneA
+          width={contentWidth}
+          horizonY={layout.camera.horizonY}
+          recipeIndex="classification"
+          palette={palette}
+        />
 
         {/* Wrapped so a detected full-board RESTART can play a cheap opacity
             settle instead of a per-car animation — no-op (opacity 1) for
