@@ -76,8 +76,12 @@ function recipeFor(recipeIndex: SceneryRecipeIndex): SceneryRecipe {
   return recipeIndex === 'classification' ? CLASSIFICATION_SCENERY_RECIPE : sceneryRecipeForSection(recipeIndex);
 }
 
-function foregroundPickFor(recipeIndex: SceneryRecipeIndex): ForegroundPick | null {
-  return recipeIndex === 'classification' ? CLASSIFICATION_FOREGROUND_RECIPE : foregroundPickForSection(recipeIndex);
+/** Zero, one, two or three picks for the given section — Clasificación's is
+ *  always empty (see recipes.ts). */
+function foregroundPicksFor(recipeIndex: SceneryRecipeIndex): readonly ForegroundPick[] {
+  return recipeIndex === 'classification'
+    ? CLASSIFICATION_FOREGROUND_RECIPE ?? []
+    : foregroundPickForSection(recipeIndex);
 }
 
 // ─────────────────────────── Zone A: sky band ───────────────────────────
@@ -105,6 +109,8 @@ function intrinsicBox(el: SceneryElement): { w: number; h: number } {
       return { w: 22, h: 58 };
     case 'forklift':
       return { w: 68, h: 46 };
+    case 'bushClump':
+      return { w: 34, h: 20 };
   }
 }
 
@@ -166,6 +172,9 @@ function SkyProp({
       break;
     case 'forklift':
       child = <Forklift w={boxW} h={h} color={structure} />;
+      break;
+    case 'bushClump':
+      child = <BushClump cx={boxW / 2} cy={h - h * 0.32} r={Math.min(boxW, h) * 0.52} color={structure} />;
       break;
     default:
       break;
@@ -230,9 +239,13 @@ function IsoSceneryZoneAImpl({ width, horizonY, recipeIndex, palette }: IsoScene
   return (
     <Group>
       <FenceLine width={width} y0={FENCE_Y0 * sy} y1={FENCE_Y1 * sy} color={palette.scenery.structure} />
+      <SkySlot slot="edgeLeft" scene={recipe.edgeLeft} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
       <SkySlot slot="left" scene={recipe.left} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
+      <SkySlot slot="gapLeft" scene={recipe.gapLeft} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
       <SkySlot slot="center" scene={recipe.center} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
+      <SkySlot slot="gapRight" scene={recipe.gapRight} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
       <SkySlot slot="right" scene={recipe.right} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
+      <SkySlot slot="edgeRight" scene={recipe.edgeRight} sx={sx} sy={sy} palette={palette} glowOpacity={glowOpacity} />
     </Group>
   );
 }
@@ -260,32 +273,45 @@ const BILLBOARD_SIZE: Record<Exclude<ForegroundPick['kind'], 'bushClump'>, { w: 
 export interface IsoSceneryForegroundGroundProps {
   foregroundOriginY: number;
   foregroundMarginPlane: number;
-  /** Plane u to centre the prop on — the board's own mid-yard u works well. */
-  centerU: number;
+  /** Plane u of the car columns' left edge / full width — picks spread
+   *  themselves across this span via their own `offsetU` (0–1). */
+  trackSX: number;
+  trackWidth: number;
   recipeIndex: SceneryRecipeIndex;
   palette: TimeOfDayPalette;
 }
 
 /**
- * Bush clump only: drawn as flat plane geometry, meant to be a CHILD of the
- * ground `<Group matrix={camera.matrix}>` — see this file's header. Renders
- * nothing when the section's pick isn't a bush clump, or when
- * `foregroundMarginPlane` is below its floor (R3: skip, never shrink).
+ * Bush-clump picks only, from the section's foreground LIST: drawn as flat
+ * plane geometry, meant to be a CHILD of the ground `<Group
+ * matrix={camera.matrix}>` — see this file's header. Each pick is gated
+ * independently on `foregroundMarginPlane` vs its own floor (R3: skip, never
+ * shrink) and placed at its own `offsetU` along the car-column width, so a
+ * sparse section can show several bush clumps spread across the strip
+ * instead of one centred blob.
  */
 function IsoSceneryForegroundGroundImpl({
   foregroundOriginY,
   foregroundMarginPlane,
-  centerU,
+  trackSX,
+  trackWidth,
   recipeIndex,
   palette,
 }: IsoSceneryForegroundGroundProps) {
-  const pick = foregroundPickFor(recipeIndex);
-  if (!pick || pick.kind !== 'bushClump') return null;
-  if (foregroundMarginPlane < pick.minMarginPlane) return null;
+  const picks = foregroundPicksFor(recipeIndex).filter(
+    (p) => p.kind === 'bushClump' && foregroundMarginPlane >= p.minMarginPlane
+  );
+  if (picks.length === 0) return null;
 
   const r = Math.max(6, Math.min(18, foregroundMarginPlane * 0.35));
   const v = foregroundOriginY + FOREGROUND_GAP + r * 0.6;
-  return <BushClump cx={centerU} cy={v} r={r} color={palette.scenery.structure} />;
+  return (
+    <Group>
+      {picks.map((p, i) => (
+        <BushClump key={i} cx={trackSX + p.offsetU * trackWidth} cy={v} r={r} color={palette.scenery.structure} />
+      ))}
+    </Group>
+  );
 }
 
 export const IsoSceneryForegroundGround = React.memo(IsoSceneryForegroundGroundImpl);
@@ -294,34 +320,31 @@ export interface IsoSceneryForegroundBillboardProps {
   camera: IsoCamera;
   foregroundOriginY: number;
   foregroundMarginPlane: number;
-  centerU: number;
+  trackSX: number;
+  trackWidth: number;
   recipeIndex: SceneryRecipeIndex;
   palette: TimeOfDayPalette;
 }
 
-/**
- * The four silhouette foreground props: billboarded (screen-space, camera-
- * projected + depth-scaled, upright) — meant to be a SIBLING of the ground
- * `<Group matrix={camera.matrix}>`, not nested inside it (see this file's
- * header). Renders nothing when the section's pick is the bush clump, or
- * when `foregroundMarginPlane` is below its floor (R3).
- */
-function IsoSceneryForegroundBillboardImpl({
+function SilhouetteBillboard({
   camera,
-  foregroundOriginY,
-  foregroundMarginPlane,
-  centerU,
-  recipeIndex,
+  v,
+  u,
+  pick,
   palette,
-}: IsoSceneryForegroundBillboardProps) {
-  const pick = foregroundPickFor(recipeIndex);
-  if (!pick || pick.kind === 'bushClump') return null;
-  if (foregroundMarginPlane < pick.minMarginPlane) return null;
-
-  const { w, h } = BILLBOARD_SIZE[pick.kind];
-  const v = foregroundOriginY + FOREGROUND_GAP;
+}: {
+  camera: IsoCamera;
+  v: number;
+  u: number;
+  /** Never `bushClump` in practice — the caller filters that kind out before
+   *  rendering this component (it belongs to `IsoSceneryForegroundGround`
+   *  instead). */
+  pick: ForegroundPick;
+  palette: TimeOfDayPalette;
+}) {
+  const { w, h } = BILLBOARD_SIZE[pick.kind as Exclude<ForegroundPick['kind'], 'bushClump'>];
   const s = camera.depthScaleAt(v);
-  const p = camera.project(centerU, v);
+  const p = camera.project(u, v);
   const transform = [{ translateX: p.x - (w * s) / 2 }, { translateY: p.y - h * s }, { scale: s }];
   const { structure, lampLight } = palette.scenery;
   const night = palette.key === 'noche';
@@ -345,6 +368,45 @@ function IsoSceneryForegroundBillboardImpl({
   }
 
   return <Group transform={transform}>{child}</Group>;
+}
+
+/**
+ * The four silhouette foreground kinds, from the section's foreground LIST:
+ * billboarded (screen-space, camera-projected + depth-scaled, upright) —
+ * meant to be a SIBLING of the ground `<Group matrix={camera.matrix}>`, not
+ * nested inside it (see this file's header). Each pick is gated
+ * independently on `foregroundMarginPlane` vs its own floor (R3) and placed
+ * at its own `offsetU` along the car-column width.
+ */
+function IsoSceneryForegroundBillboardImpl({
+  camera,
+  foregroundOriginY,
+  foregroundMarginPlane,
+  trackSX,
+  trackWidth,
+  recipeIndex,
+  palette,
+}: IsoSceneryForegroundBillboardProps) {
+  const picks = foregroundPicksFor(recipeIndex).filter(
+    (p) => p.kind !== 'bushClump' && foregroundMarginPlane >= p.minMarginPlane
+  );
+  if (picks.length === 0) return null;
+
+  const v = foregroundOriginY + FOREGROUND_GAP;
+  return (
+    <Group>
+      {picks.map((p, i) => (
+        <SilhouetteBillboard
+          key={i}
+          camera={camera}
+          v={v}
+          u={trackSX + p.offsetU * trackWidth}
+          pick={p}
+          palette={palette}
+        />
+      ))}
+    </Group>
+  );
 }
 
 export const IsoSceneryForegroundBillboard = React.memo(IsoSceneryForegroundBillboardImpl);

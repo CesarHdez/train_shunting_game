@@ -85,24 +85,67 @@ describe('CLASSIFICATION_SCENERY_RECIPE', () => {
 });
 
 describe('foregroundPickForSection / SHUNTING_FOREGROUND_RECIPES', () => {
-  it('has exactly one pick per shunting section', () => {
+  it('has exactly one pick LIST per shunting section, each with 1-3 picks', () => {
     expect(SHUNTING_FOREGROUND_RECIPES).toHaveLength(10);
+    for (const picks of SHUNTING_FOREGROUND_RECIPES) {
+      expect(picks.length).toBeGreaterThanOrEqual(1);
+      expect(picks.length).toBeLessThanOrEqual(3);
+    }
   });
 
-  it('every pick carries the §2.3 floor for its own kind', () => {
-    for (const p of SHUNTING_FOREGROUND_RECIPES) {
-      expect(p.minMarginPlane).toBe(FOREGROUND_MIN_MARGIN[p.kind]);
+  it('every pick carries the §2.3 floor for its own kind and a valid offsetU', () => {
+    for (const picks of SHUNTING_FOREGROUND_RECIPES) {
+      for (const p of picks) {
+        expect(p.minMarginPlane).toBe(FOREGROUND_MIN_MARGIN[p.kind]);
+        expect(p.offsetU).toBeGreaterThanOrEqual(0);
+        expect(p.offsetU).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('biases sparser sections (lower track counts) toward more picks than the densest ones', () => {
+    // Sección 1 (3-4 tracks, sparsest) vs Secciones 8-10 (7 tracks, densest).
+    expect(SHUNTING_FOREGROUND_RECIPES[0].length).toBeGreaterThan(SHUNTING_FOREGROUND_RECIPES[9].length);
+    for (const picks of SHUNTING_FOREGROUND_RECIPES.slice(7)) {
+      expect(picks.length).toBe(1);
     }
   });
 
   it('uses the forklift exactly once — Sección 5, echoing that section\'s own sky-band motif', () => {
-    const forkliftSections = SHUNTING_FOREGROUND_RECIPES.filter((p) => p.kind === 'forklift');
+    const forkliftSections = SHUNTING_FOREGROUND_RECIPES.filter((picks) => picks.some((p) => p.kind === 'forklift'));
     expect(forkliftSections).toHaveLength(1);
-    expect(foregroundPickForSection(4).kind).toBe('forklift'); // Sección 5, 0-indexed
+    expect(foregroundPickForSection(4).some((p) => p.kind === 'forklift')).toBe(true); // Sección 5, 0-indexed
   });
 
   it('clamps an out-of-range section index rather than returning undefined', () => {
     expect(foregroundPickForSection(-1)).toEqual(SHUNTING_FOREGROUND_RECIPES[0]);
     expect(foregroundPickForSection(999)).toEqual(SHUNTING_FOREGROUND_RECIPES[9]);
+  });
+});
+
+describe('SCENERY_SLOTS gap coverage (edgeLeft/gapLeft/gapRight/edgeRight)', () => {
+  it('every shunting recipe populates both edge slots, on every section including the sparsest', () => {
+    for (const recipe of SHUNTING_SCENERY_RECIPES) {
+      expect(recipe.edgeLeft.length).toBeGreaterThan(0);
+      expect(recipe.edgeRight.length).toBeGreaterThan(0);
+    }
+    expect(CLASSIFICATION_SCENERY_RECIPE.edgeLeft.length).toBeGreaterThan(0);
+    expect(CLASSIFICATION_SCENERY_RECIPE.edgeRight.length).toBeGreaterThan(0);
+  });
+
+  it('most recipes also populate the two inter-slot gaps (gapLeft/gapRight) by default', () => {
+    const populatedGapLeft = SHUNTING_SCENERY_RECIPES.filter((r) => r.gapLeft.length > 0).length;
+    const populatedGapRight = SHUNTING_SCENERY_RECIPES.filter((r) => r.gapRight.length > 0).length;
+    expect(populatedGapLeft).toBe(SHUNTING_SCENERY_RECIPES.length);
+    expect(populatedGapRight).toBe(SHUNTING_SCENERY_RECIPES.length);
+  });
+
+  it('Sección 6/7 keep symmetric gap/edge filler (same kind both sides), matching their mirrored backdrop', () => {
+    const seccion6 = SHUNTING_SCENERY_RECIPES[5];
+    const seccion7 = SHUNTING_SCENERY_RECIPES[6];
+    expect(seccion6.gapLeft[0]?.kind).toBe(seccion6.gapRight[0]?.kind);
+    expect(seccion6.edgeLeft[0]?.kind).toBe(seccion6.edgeRight[0]?.kind);
+    expect(seccion7.gapLeft[0]?.kind).toBe(seccion7.gapRight[0]?.kind);
+    expect(seccion7.edgeLeft[0]?.kind).toBe(seccion7.edgeRight[0]?.kind);
   });
 });

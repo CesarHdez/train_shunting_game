@@ -240,6 +240,72 @@ them:
 containerHues = { red: '#c0392b', blue: '#1f5fa8', amber: '#d68a1f' }
 ```
 
+### 2.5 Addendum: closing the sky-band's structural gaps + a foreground LIST (wide-viewport user report)
+
+A user testing in a genuinely wide browser window (not the narrow ~844px
+viewport all prior verification used) circled two problems that only show up
+past roughly `playAreaMaxWidth` (`design/tokens.ts`, 1100dp) of canvas width,
+because they scale with `sx = width / REF_W` like everything else in this
+file — small in absolute dp on a phone, large on a wide window:
+
+1. **The original three `SCENERY_SLOTS` (LEFT/CENTER/RIGHT above) left FOUR
+   permanently-empty stretches** in the 960-wide reference band — `0–60`
+   (before LEFT), `260–380` (LEFT→CENTER), `580–700` (CENTER→RIGHT), and
+   `900–960` (after RIGHT) — 37.5% of the band's width, on every section,
+   regardless of track count.
+2. **The foreground (Zone B) only ever rendered ONE centred prop per
+   section**, leaving most of a sparse section's foreground strip WIDTH bare
+   below a single item.
+
+**Fix 1 — four new slots in `refBand.ts`'s `SCENERY_SLOTS`,** LEFT/CENTER/
+RIGHT left untouched:
+
+| Slot | Range (960-wide ref units) | Purpose |
+|---|---|---|
+| `edgeLeft` | `4–52` | Near the band's true left end |
+| `left` | `60–260` | Unchanged |
+| `gapLeft` | `272–368` | Bridges LEFT↔CENTER |
+| `center` | `380–580` | Unchanged |
+| `gapRight` | `592–688` | Bridges CENTER↔RIGHT |
+| `right` | `700–900` | Unchanged |
+| `edgeRight` | `908–956` | Near the band's true right end |
+
+`edgeLeft`/`edgeRight` are populated in **every** `SceneryRecipe` (including
+Sección 1, the sparsest) — almost always with a small `bushClump` (the kit's
+cheapest prop, now also usable in Zone A at a small intrinsic box, `34×20`
+ref units — see `IsoScenery.tsx`'s `intrinsicBox`/`SkyProp` `'bushClump'`
+cases). `gapLeft`/`gapRight` are populated in the DEFAULT case too (every
+shunting recipe + Clasificación's), with Sección 6/7's mirrored recipes
+kept symmetric (same kind on both sides) so the existing "twin throat" read
+isn't undone. `SceneryRecipe` grew four new required (possibly-empty)
+`SceneryScene` fields: `edgeLeft`, `gapLeft`, `gapRight`, `edgeRight`.
+
+**Fix 2 — `ForegroundPick` became a per-section LIST (1–3 entries)** instead
+of a single centred pick, each with its own `offsetU` (0–1 fraction across
+the car-column width) and its own `minMarginPlane` gate (R3 now applies PER
+ITEM, not once per section — a dense level thins the list down naturally,
+never squeezing). `SHUNTING_FOREGROUND_RECIPES` is now
+`readonly ForegroundPick[][]`; `foregroundPickForSection` returns the array.
+`IsoSceneryForegroundGround`/`IsoSceneryForegroundBillboard` take
+`trackSX`/`trackWidth` (not a single `centerU`) and map each surviving pick
+to `u = trackSX + pick.offsetU * trackWidth`.
+
+Picks are biased by actual track count (`assets/levels/shunting/*.json`):
+Sección 1 (3–4 tracks) gets 3 spread picks; Secciones 2–5 (4–6 tracks) get
+2; Secciones 6–7 (6 tracks, first `hasRightLoco` pair) get 2, kept mirrored
+in position to match their symmetric backdrop; Secciones 8–10 (7 tracks, the
+densest) get a single pick each, same as before this fix. Classification's
+foreground stays `null` (unchanged — R5, containers must stay
+sky-band-only).
+
+No new invariants were touched: everything above still lives strictly in
+Zone A (`y < horizonY`, screen-space, never in `camera.matrix`) or Zone B
+(gated by `foregroundMarginPlane`, R2/R3 unchanged), no new `hitTest`/
+`GestureDetector` (R4), no new `BlurMask`, and the night-only lamp-glow
+mechanism (`useTwinkle`) is unchanged — the new slots' `bushClump`/
+`signagePost`/`lampPost` instances reuse the exact same per-kind rendering
+`SkyProp` already had, just at new positions.
+
 ---
 
 ## 3. Ballast (gravel texture)

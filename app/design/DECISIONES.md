@@ -221,3 +221,37 @@ Para verificar los niveles altos (la locomotora derecha aparece a partir del
   hasta la sección 6.
 - Está **apagado por defecto**: sin la variable `SEED_LEVELS` no hace nada.
   Uso: `SEED_LEVELS=50 LEVEL='NIVEL 51' node tools/webshot.mjs`.
+
+---
+
+## 14. Ambiente del patio — cobertura del cielo y del primer plano
+
+Ampliación de la sección 2 tras verificar en ventana ancha, no solo en la
+angosta de prueba.
+
+- **El cielo tenía cuatro huecos estructurales**, siempre vacíos sin importar
+  la sección: los tres espacios fijos (izquierda, centro, derecha) solo
+  cubrían 600 de las 960 unidades de la franja de referencia, dejando un
+  37,5% del ancho permanentemente vacío en cuatro tramos. Poco notorio en una
+  ventana angosta, muy notorio en una ancha, porque es una fracción constante
+  del ancho del lienzo. **Se agregaron cuatro espacios más** (dos en los
+  bordes verdaderos de la franja, dos entre los tres originales), poblados
+  por defecto en las 11 recetas con piezas pequeñas del mismo kit (sobre todo
+  arbustos), sin inventar geometría nueva.
+- **El primer plano pasó de un solo adorno centrado a una lista de 1 a 3**,
+  repartidos a lo ancho, cada uno con su propio umbral de margen. Las
+  secciones dispersas (pocas vías, más margen) llevan más; la más densa
+  (7 vías, capacidad 13) se queda con uno solo, como antes.
+- **Límite arquitectónico importante, verificado con capturas de detalle**:
+  el área jugable tiene un ancho máximo fijo, `layout.playAreaMaxWidth`
+  (1100 pt) — el tablero de Skia NUNCA es más ancho que eso, sin importar
+  cuán ancha sea la ventana. Más allá de ese límite hay un margen de la
+  propia pantalla, ya pintado a propósito del mismo tono superior del cielo
+  (ver el comentario en `GameScreen.tsx` junto a `boardWidth`), pero **plano,
+  sin degradado, sin estrellas ni props** — porque está literalmente fuera
+  del lienzo de Skia. Ningún relleno de escenografía puede llegar ahí. Esto
+  es deliberado (evita que el patio se estire de forma absurda en una
+  pantalla ancha de escritorio o una tablet grande) y no es un defecto a
+  corregir con más props — si alguna vez se quiere que ese margen también
+  lleve dibujo, es una decisión de layout aparte (subir el tope o decorar
+  esa `View` exterior), no un ajuste de las recetas.

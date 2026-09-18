@@ -803,7 +803,8 @@ export function ShuntingBoard({
             <IsoSceneryForegroundGround
               foregroundOriginY={layout.foregroundOriginY}
               foregroundMarginPlane={layout.foregroundMarginPlane}
-              centerU={layout.trackSX + layout.trackWidth / 2}
+              trackSX={layout.trackSX}
+              trackWidth={layout.trackWidth}
               recipeIndex={recipeIndex}
               palette={palette}
             />
@@ -880,7 +881,8 @@ export function ShuntingBoard({
             camera={layout.camera}
             foregroundOriginY={layout.foregroundOriginY}
             foregroundMarginPlane={layout.foregroundMarginPlane}
-            centerU={layout.trackSX + layout.trackWidth / 2}
+            trackSX={layout.trackSX}
+            trackWidth={layout.trackWidth}
             recipeIndex={recipeIndex}
             palette={palette}
           />

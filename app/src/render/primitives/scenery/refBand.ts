@@ -47,14 +47,34 @@ export const FENCE_Y0 = 150;
 export const FENCE_Y1 = 168;
 
 /**
- * The three fixed horizontal slots new per-section props render in, in
- * 960-wide reference-band units (scenery-spec.md §2.2). Each slot is a
- * (x0, x1) box; a prop is centred/scaled to fit inside it.
+ * The horizontal slots new per-section props render in, in 960-wide
+ * reference-band units (scenery-spec.md §2.2). Each slot is a (x0, x1) box; a
+ * prop is centred/scaled to fit inside it.
+ *
+ * `left`/`center`/`right` are the ORIGINAL three slots (unchanged — every
+ * existing recipe keeps addressing them by these exact names/bounds).
+ *
+ * `edgeLeft`/`edgeRight`/`gapLeft`/`gapRight` close the four structurally
+ * empty stretches those three slots left behind (0–60, 260–380, 580–700,
+ * 900–960 — 37.5% of the band's width, on every section, regardless of
+ * track count). This only became visible on wide viewports (see the user
+ * report that added these slots) because the gaps scale with `sx = width /
+ * REF_W` just like everything else — small in absolute dp on a narrow phone,
+ * large on a wide window. `edgeLeft`/`edgeRight` sit near the band's true
+ * ends and are populated in EVERY recipe (including the sparsest) so the
+ * canvas never reads as dead-stopping at its own edges; `gapLeft`/`gapRight`
+ * bridge the two inter-slot gaps and are populated in MOST recipes (the
+ * default), with a fully-bare gap being the deliberate exception, not the
+ * norm.
  */
 export const SCENERY_SLOTS = {
+  edgeLeft: { x0: 4, x1: 52 },
   left: { x0: 60, x1: 260 },
+  gapLeft: { x0: 272, x1: 368 },
   center: { x0: 380, x1: 580 },
+  gapRight: { x0: 592, x1: 688 },
   right: { x0: 700, x1: 900 },
+  edgeRight: { x0: 908, x1: 956 },
 } as const;
 
 export type SceneryFixedSlot = keyof typeof SCENERY_SLOTS;
