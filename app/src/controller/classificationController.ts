@@ -15,7 +15,6 @@ import { getBackendApi, globalDocId, type ScoreEntry } from './backendApi';
 import { fireHaptic, type HapticToken } from './haptics';
 import { SoundManager } from '../audio/sounds';
 import { createFeedbackQueue } from './feedbackQueue';
-import { canReopenSummary, isSummaryVisible } from './summaryGate';
 import { motion } from '../../design/tokens';
 import type { PointsDelta } from '../components/hud/PointsDeltaBadge';
 import {
@@ -71,23 +70,12 @@ export interface UseClassificationControllerResult {
   /** This-push change in live `puntos` (after − before), or null before the first push. */
   lastPointsDelta: PointsDelta | null;
   /**
-   * True once the winning push's board animation has landed AND the player
-   * hasn't dismissed the summary card yet. Drives both
-   * `WinSummaryCard.visible` and `ClassificationBoard.showCelebration`
-   * (dismissing stops the confetti too) — never flip these on `state.status`
+   * True once the winning push's board animation has landed. Drives both
+   * `WinSummaryCard.visible` and `ClassificationBoard.showCelebration` — never flip these on `state.status`
    * alone, or the card/confetti pop in at move START instead of when the
-   * wagon visibly arrives. See summaryGate.ts.
+   * wagon visibly arrives.
    */
   summaryVisible: boolean;
-  /** True once the level is finished but the card is currently hidden —
-   *  drives a small "RESULTADOS" reopen affordance in the HUD. */
-  canReopenSummary: boolean;
-  /** Closes the summary card (✕ button, tap-outside, or Android back) without
-   *  losing any result state — the level stays finished and the board keeps
-   *  its final state. Never re-fires a sound/haptic or resubmits the score. */
-  dismissSummary: () => void;
-  /** Brings the summary card back after it was dismissed, for the same finish. */
-  reopenSummary: () => void;
   /** Pass to `ClassificationBoard.onAnimationComplete`. */
   onBoardAnimationComplete: () => void;
   /** True once the finish-finalize leaderboard fetch has settled AND the
@@ -118,15 +106,9 @@ export function useClassificationController(
   const [offline, setOffline] = useState(false);
   // Reveal gate. Stays false while status flips to SUMMARY at move-start;
   // only flips true once the board reports the winning push's animation has
-  // actually landed (or the fallback fires). `summaryVisible`/
-  // `canReopenSummary` below (see summaryGate.ts) are what actually drive
-  // WinSummaryCard/board confetti — never this alone.
+  // actually landed (or the fallback fires). Exposed as
+  // `summaryVisible` — drives WinSummaryCard/board confetti.
   const [celebrate, setCelebrate] = useState(false);
-  // True once the player has explicitly closed the summary card (✕, tap
-  // outside, or Android back) for the CURRENT finish. Reset alongside
-  // `celebrate` on level change/restart so a fresh finish always shows the
-  // card again — see the two effects below.
-  const [summaryDismissed, setSummaryDismissed] = useState(false);
   // Transient this-push score delta for the floating "+N"/"−N" HUD badge —
   // see PointsDeltaBadge. `nonce` lets the UI re-trigger the fade even when
   // the same delta value repeats on consecutive pushes.
@@ -162,7 +144,6 @@ export function useClassificationController(
     setGlobalLeaderboard([]);
     setOffline(false);
     setCelebrate(false);
-    setSummaryDismissed(false);
     setLastPointsDelta(null);
     startTimeRef.current = Date.now();
     finishHandledRef.current = false;
@@ -212,7 +193,10 @@ export function useClassificationController(
       setPrevState(before);
       setState(after);
 
-      if (after.message && after.message !== before.message) {
+      // Every engine action clears `message` first, so a non-empty one here
+      // is always fresh — comparing against `before` would swallow a repeat
+      // of the same rejection (e.g. tapping a locked-out arrival twice).
+      if (after.message) {
         showToast(after.message);
         if (after.message !== 'Movimiento deshecho') {
           void fireHaptic('error');
@@ -227,10 +211,17 @@ export function useClassificationController(
         // HAPTIC are coupling feedback, deferred until the wagon visibly
         // arrives (onBoardAnimationComplete flushes the queue below), never
         // played at move-commit ("push START").
+        // Same sound rules as Maniobras (shuntingController's computeFeedback):
+        // the coupling clack only plays when the pushed car couples onto cars
+        // already standing on the track; rolling into an empty track stays
+        // silent, as a shunting cut arriving at an empty track does.
+        const destino = after.clasif.findIndex((v, i) => v.length > before.clasif[i].length);
+        const couples = destino >= 0 && before.clasif[destino].length > 0;
         const haptic: HapticToken = afterScore.saltos > beforeScore.saltos ? 'warning' : 'medium';
         feedbackQueue.queue(() => {
+          if (!couples) return;
           void fireHaptic(haptic);
-          SoundManager.play('push');
+          SoundManager.play('move');
         });
         deltaNonceRef.current += 1;
         setLastPointsDelta({ value: afterScore.puntos - beforeScore.puntos, nonce: deltaNonceRef.current });
@@ -331,7 +322,6 @@ export function useClassificationController(
     setScoreResult(null);
     setOffline(false);
     setCelebrate(false);
-    setSummaryDismissed(false);
     setLastPointsDelta(null);
     startTimeRef.current = Date.now();
     finishHandledRef.current = false;
@@ -341,14 +331,6 @@ export function useClassificationController(
     // it must never play against the freshly-reset board.
     feedbackQueue.clear();
   }, [engine, feedbackQueue]);
-
-  // Closes the card without touching finish state, sound, or the leaderboard
-  // fetch — those are all owned by the effects above, keyed off `celebrate`/
-  // `scoreResult`, and are unaffected by this flag. A late-arriving
-  // `scoreResult` after dismissal must NOT reopen the card (summaryVisible
-  // only depends on `celebrate`/`summaryDismissed`, never on scoreResult).
-  const dismissSummary = useCallback(() => setSummaryDismissed(true), []);
-  const reopenSummary = useCallback(() => setSummaryDismissed(false), []);
 
   const undo = useCallback(() => {
     if (state.moves <= 0 || state.finished) return;
@@ -429,10 +411,7 @@ export function useClassificationController(
     globalLeaderboard,
     saltos,
     lastPointsDelta,
-    summaryVisible: isSummaryVisible(celebrate, summaryDismissed),
-    canReopenSummary: canReopenSummary(celebrate, summaryDismissed),
-    dismissSummary,
-    reopenSummary,
+    summaryVisible: celebrate,
     onBoardAnimationComplete,
     offline,
   };

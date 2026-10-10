@@ -107,12 +107,19 @@ export interface ClassificationLayout {
 }
 
 /** See MIN/MAX_SCREEN_ROW_PITCH in shuntingLayout.ts — same reasoning. */
-const MIN_SCREEN_ROW_PITCH = 27;
+const MIN_SCREEN_ROW_PITCH = 29;
+/**
+ * Dense levels (e.g. 4 arrivals + 4 classification tracks) may squeeze the
+ * pitch down to this floor so every row fits on a landscape phone without
+ * scrolling; car width follows the pitch (see `fitCap` below).
+ */
+const FLOOR_SCREEN_ROW_PITCH = 22;
 const MAX_SCREEN_ROW_PITCH = 64;
 
 /** Design-box ratios of the classification car art — see ClassificationWagon. */
 const CLF_BOX_W = 58;
-const CLF_BOX_RAIL_Y = 35;
+const ROW_FILL = 0.96;
+const CLF_BOX_RAIL_Y = 38; // = CLF_BOX_H in primitives/ClassificationWagon.tsx
 
 /** See the identical constant in shuntingLayout.ts. */
 const EDGE_BLEED_FRACTION = 0.08;
@@ -122,15 +129,22 @@ export function computeClassificationLayout(params: ClassificationLayoutParams):
 
   const cosTilt = Math.cos(isoCameraTokens.tiltDeg * (Math.PI / 180));
   const topPad = spacing.lg;
-  const minPlanePitch = MIN_SCREEN_ROW_PITCH / cosTilt;
   const maxPlanePitch = MAX_SCREEN_ROW_PITCH / cosTilt;
+  const rowCount = Math.max(0, arrivalsCount) + Math.max(0, clasifCount);
+
+  const first = planeSizeForViewport({ viewportWidth: width, viewportHeight: height });
+  // Pitch that would fit every row (plus the 0.75-row divider) in the
+  // viewport as-is; only allowed to undercut the normal minimum down to the
+  // floor — beyond that the content grows and scrolls as before.
+  const fitPlanePitch = rowCount > 0 ? (first.planeHeight - topPad * 2) / (rowCount + 0.75) : Infinity;
+  const minPlanePitch = Math.max(
+    FLOOR_SCREEN_ROW_PITCH / cosTilt,
+    Math.min(MIN_SCREEN_ROW_PITCH / cosTilt, fitPlanePitch)
+  );
 
   // The gap between the two blocks is worth about three quarters of a row:
   // "what is waiting" and "where it goes" are different places in the yard.
-  const rowCount = Math.max(0, arrivalsCount) + Math.max(0, clasifCount);
   const dividerGap = minPlanePitch * 0.75;
-
-  const first = planeSizeForViewport({ viewportWidth: width, viewportHeight: height });
   const neededPlaneHeight = topPad * 2 + Math.max(0, rowCount) * minPlanePitch + dividerGap;
 
   let contentHeight = height;
@@ -171,20 +185,26 @@ export function computeClassificationLayout(params: ClassificationLayoutParams):
   const trackSX = sideMargin + gutterWidth;
   const trackWidth = Math.max(0, planeWidth - trackSX - readoutWidth - sideMargin);
 
-  const { width: arrCarWidth, gap: arrCarGap } = fitCarDims(
-    arrSlots,
-    trackWidth,
-    L.carGap,
-    L.carWidthMin,
-    L.carWidthMax
-  );
-  const { width: clasCarWidth, gap: clasCarGap } = fitCarDims(
-    clasSlots,
-    trackWidth,
-    L.carGap,
-    L.carWidthMin,
-    L.carWidthMax
-  );
+  // A car's on-screen height (rail line above its sprite top) must fit inside
+  // one row's screen pitch, or neighbouring rows' cars stack on each other.
+  // Cap the width so railY <= ROW_FILL * screen pitch (cars are billboarded
+  // upright, so their height is cosTilt-independent; the row pitch is not).
+  // Perspective compresses far rows, so measure the real projected spacing
+  // (per unit of the nearer row's depth scale) instead of assuming cosTilt.
+  let screenPitch = rowPitch * cosTilt;
+  const allV: number[] = [];
+  for (let i = 0; i < arrivalsCount; i++) allV.push(arrY(i));
+  for (let i = 0; i < clasifCount; i++) allV.push(clasY(i));
+  for (let i = 0; i + 1 < allV.length; i++) {
+    const dy = camera.project(0, allV[i + 1]).y - camera.project(0, allV[i]).y;
+    // Skip the block divider gap: it is deliberately wider than a row.
+    if (dy > 0) screenPitch = Math.min(screenPitch, dy / camera.depthScaleAt(allV[i + 1]));
+  }
+  const fitCap = Math.max(24, ((screenPitch * ROW_FILL) * CLF_BOX_W) / CLF_BOX_RAIL_Y);
+  const carMax = Math.min(L.carWidthMax, fitCap);
+  const carMin = Math.min(L.carWidthMin, carMax);
+  const { width: arrCarWidth, gap: arrCarGap } = fitCarDims(arrSlots, trackWidth, L.carGap, carMin, carMax);
+  const { width: clasCarWidth, gap: clasCarGap } = fitCarDims(clasSlots, trackWidth, L.carGap, carMin, carMax);
 
   const arrCarX = (j: number) => trackSX + j * (arrCarWidth + arrCarGap);
   const clasCarX = (j: number) => trackSX + j * (clasCarWidth + clasCarGap);

@@ -1,15 +1,15 @@
 {
   "id": 1,
   "name": "Turno 1 · Primeros destinos",
-  "description": "1 vía de llegada · 2 destinos · capacidad sobrada",
+  "description": "1 vía de llegada · 2 colores · 2 vías · Cada color a su vía",
   "arrivals": [
     [
-      "F-rojo",
-      "T-azul",
-      "F-rojo",
-      "J-azul",
-      "V-rojo",
-      "C-azul"
+      "V-verde",
+      "T-ambar",
+      "T-verde",
+      "T-ambar",
+      "F-ambar",
+      "C-verde"
     ]
   ],
   "capacities": [

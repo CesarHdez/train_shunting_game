@@ -19,10 +19,10 @@ import { getTimeOfDayPalette, radii, spacing, typeScaleMenu, withAlpha } from '.
 import Button from '../components/Button';
 import SkyBackground from '../components/SkyBackground';
 import HillSilhouette from '../components/HillSilhouette';
-import { ClockIcon } from '../components/icons';
+import LocoIcon from '../components/LocoIcon';
 import { fireHaptic } from '../controller/haptics';
 import { usePlayer } from '../controller/PlayerContext';
-import { useTimeOfDay, useTimeOfDaySetting } from '../render/iso/timeOfDay';
+import { useTimeOfDay } from '../render/iso/timeOfDay';
 import type { RootScreenProps } from '../navigation/types';
 
 /**
@@ -45,9 +45,7 @@ export default function LoginScreen({ navigation }: RootScreenProps<'Login'>) {
   const inputRef = useRef<TextInput>(null);
 
   const resolvedTimeOfDay = useTimeOfDay();
-  const setting = useTimeOfDaySetting();
   const palette = getTimeOfDayPalette(resolvedTimeOfDay);
-  const clockLabel = setting === 'auto' ? `AUTOMÁTICO · ${palette.label.toUpperCase()}` : palette.label.toUpperCase();
 
   const tryStart = () => {
     const trimmed = name.trim();
@@ -92,13 +90,6 @@ export default function LoginScreen({ navigation }: RootScreenProps<'Login'>) {
         <View style={[styles.towerHead, { backgroundColor: palette.scenery.structure }]} />
       </View>
 
-      <View style={[styles.clockBadge, { backgroundColor: palette.hud.buttonBg, borderColor: palette.hud.buttonBorder }]}>
-        <ClockIcon size={12} color={palette.hud.accent} />
-        <Text style={[styles.clockLabel, { color: palette.hud.accent }]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
-          {clockLabel}
-        </Text>
-      </View>
-
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
           style={styles.flexCenter}
@@ -110,15 +101,8 @@ export default function LoginScreen({ navigation }: RootScreenProps<'Login'>) {
               { backgroundColor: palette.hud.buttonBg, borderColor: palette.hud.buttonBorder },
             ]}
           >
-            <View style={styles.logoRow}>
-              <View style={[styles.logoBox, { backgroundColor: palette.hud.accent }]} />
-              <View style={[styles.logoCab, { backgroundColor: palette.hud.accent }]} />
-              <View
-                style={[
-                  styles.logoLight,
-                  { backgroundColor: palette.hud.text, shadowColor: palette.hud.accent },
-                ]}
-              />
+            <View style={styles.logo}>
+              <LocoIcon width={76} color={palette.hud.accent} />
             </View>
             <Text style={[styles.title, { color: palette.hud.text }]} maxFontSizeMultiplier={1.3}>
               Patio de Trenes
@@ -200,22 +184,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  clockBadge: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    height: 26,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    zIndex: 2,
-  },
-  clockLabel: {
-    ...typeScaleMenu.micro,
-  },
   safe: {
     flex: 1,
   },
@@ -234,32 +202,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
+  logo: {
     marginBottom: spacing.sm,
-  },
-  logoBox: {
-    width: 26,
-    height: 18,
-    borderRadius: 2,
-  },
-  logoCab: {
-    width: 12,
-    height: 13,
-    borderRadius: 2,
-    marginBottom: 5,
-  },
-  logoLight: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    marginBottom: 6,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 4,
-    elevation: 3,
   },
   title: {
     ...typeScaleMenu.h1,

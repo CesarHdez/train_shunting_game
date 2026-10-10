@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { colors, getTimeOfDayPalette, layout, radii, spacing, typeScaleMenu } from '../../design/tokens';
+import { getTimeOfDayPalette, layout, radii, spacing, typeScaleMenu } from '../../design/tokens';
 import ModeCard from '../components/ModeCard';
 import MuteToggleButton from '../components/MuteToggleButton';
 import SkyBackground from '../components/SkyBackground';
 import HillSilhouette from '../components/HillSilhouette';
-import { GearIcon, TrainIcon } from '../components/icons';
+import { GearIcon } from '../components/icons';
+import LocoIcon from '../components/LocoIcon';
+import ClassificationIcon from '../components/ClassificationIcon';
 import { fireHaptic } from '../controller/haptics';
 import { usePlayer } from '../controller/PlayerContext';
 import { useTimeOfDay } from '../render/iso/timeOfDay';
@@ -17,26 +18,6 @@ import type { RootScreenProps } from '../navigation/types';
 
 const EMPTY: ProgressInfo = { completedCount: 0, totalCount: 0 };
 const MODE_ICON_SIZE = 28;
-
-/**
- * Rail-turnout mark for "Patio de Clasificación" — a short rail merging
- * diagonally into a long one, with a switch-point node at each end. Not part
- * of the icons/ contract (that set has no shunting-switch glyph); drawn
- * locally at a larger, higher-contrast scale than the first pass so it
- * reads as a track switch rather than a smudge of dashes at card size.
- */
-function SwitchMark({ color, size = MODE_ICON_SIZE }: { color: string; size?: number }) {
-  const height = size;
-  const width = size * 1.5;
-  return (
-    <Svg width={width} height={height} viewBox="0 0 32 20">
-      <Path d="M2 6 H16 M2 14 H30" stroke={color} strokeWidth={2.8} strokeLinecap="round" fill="none" />
-      <Path d="M16 6 L24 14" stroke={color} strokeWidth={2.8} strokeLinecap="round" fill="none" />
-      <Circle cx={16} cy={6} r={2.4} fill={color} />
-      <Circle cx={24} cy={14} r={2.4} fill={color} />
-    </Svg>
-  );
-}
 
 /**
  * Mode-select screen — two cards, ref/js/main.js `drawModeSelect`. Reskinned
@@ -118,20 +99,20 @@ export default function ModeSelectScreen({ navigation }: RootScreenProps<'ModeSe
 
         <View style={styles.cards}>
           <ModeCard
-            icon={<TrainIcon size={MODE_ICON_SIZE} color={colors.modeAccent.shunting} />}
+            icon={<LocoIcon width={MODE_ICON_SIZE * 1.5} color={palette.hud.accent} />}
             title="Patio de Maniobras"
             subtitleLines={['Mueve la locomotora y ordena los', 'vagones en la secuencia objetivo.']}
-            accentColor={colors.modeAccent.shunting}
+            accentColor={palette.hud.accent}
             progressLabel={`${shuntingProgress.completedCount}/${shuntingLevelCount} niveles`}
             progressFraction={shuntingLevelCount ? shuntingProgress.completedCount / shuntingLevelCount : 0}
             palette={palette}
             onPress={() => navigation.navigate('LevelSelect', { mode: 'shunting' })}
           />
           <ModeCard
-            icon={<SwitchMark color={colors.modeAccent.classification} />}
+            icon={<ClassificationIcon width={MODE_ICON_SIZE * 1.5} color={palette.hud.accent} />}
             title="Patio de Clasificación"
             subtitleLines={['Empuja cada vagón desde el lomo hacia', 'la vía de su color de destino.']}
-            accentColor={colors.modeAccent.classification}
+            accentColor={palette.hud.accent}
             progressLabel={`${clfProgress.completedCount}/${classificationLevelCount} turnos`}
             progressFraction={classificationLevelCount ? clfProgress.completedCount / classificationLevelCount : 0}
             palette={palette}

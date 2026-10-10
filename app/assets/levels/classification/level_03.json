@@ -1,26 +1,25 @@
 {
   "id": 3,
-  "name": "Turno 3 · Tráfico cruzado",
-  "description": "2 vías de llegada · 3 destinos · capacidad sobrada",
+  "name": "Turno 3 · Dos llegadas",
+  "description": "2 vías de llegada · 3 colores · 3 vías · Elige de qué vía de llegada sacas cada carro",
   "arrivals": [
     [
-      "F-rojo",
-      "T-azul",
-      "C-verde",
-      "F-rojo",
-      "J-azul"
+      "T-violeta",
+      "C-violeta",
+      "C-rojo",
+      "J-verde",
+      "T-verde"
     ],
     [
-      "V-verde",
+      "C-rojo",
       "T-rojo",
-      "C-azul",
-      "F-verde",
-      "J-rojo"
+      "C-verde",
+      "J-verde"
     ]
   ],
   "capacities": [
     4,
-    4,
-    4
+    2,
+    3
   ]
 }

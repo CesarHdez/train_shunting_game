@@ -6,6 +6,9 @@
  *
  * Rule: only the HEAD (index 0) car of the selected arrival track may be
  * pushed ("regla del lomo") into a classification track with free capacity.
+ * The pushed car enters the classification track from its entry end
+ * (index 0, the throat side) and shoves the cars already standing there one
+ * place deeper — like a shunting push, not a stack appended at the far end.
  */
 
 import type { ClassificationLevel } from '../data/levelTypes';
@@ -135,14 +138,18 @@ export class ClassificationEngine {
 
   selectArrival(i: number): void {
     if (this.state.finished) return;
+    this.state.message = '';
     if (i >= 0 && i < this.state.arrivals.length && this.state.arrivals[i].length > 0) {
       this.state.viaSel = i;
     }
   }
 
-  /** Push the head car of the selected arrival track onto classification track `destino`. */
+  /** Push the head car of the selected arrival track into classification track `destino`, at its entry end. */
   empujar(destino: number): void {
     if (this.state.finished || this.state.status !== 'PLAYING') return;
+    // Each action starts with a clean message, so a repeat of the same
+    // rejection still reads as new to the controller (and toasts again).
+    this.state.message = '';
     const via = this.state.arrivals[this.state.viaSel];
     if (!via || via.length === 0) return;
     if (this.state.clasif[destino].length >= this.state.capacities[destino]) {
@@ -152,7 +159,7 @@ export class ClassificationEngine {
 
     this.pushHistory();
     const carro = via.shift()!;
-    this.state.clasif[destino].push(carro);
+    this.state.clasif[destino].unshift(carro);
     this.state.moves++;
 
     // If the selected arrival emptied, jump to another one with cars left.
@@ -164,6 +171,7 @@ export class ClassificationEngine {
   }
 
   undo(): void {
+    this.state.message = '';
     if (this.history.length === 0 || this.state.finished) return;
     const prev = this.history.pop()!;
     this.state.arrivals = prev.arrivals;
