@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TimeOfDayPalette } from '../../design/tokens';
 
 interface SkyBackgroundProps {
   palette: TimeOfDayPalette;
-  /** SVG `id`s must be document-unique on web (react-native-web renders a
-   *  real DOM `<svg>`), so each screen passes its own. */
+  /** Readable prefix for the gradient's SVG `id` (made unique per instance
+   *  below). */
   gradientId: string;
 }
 
@@ -32,8 +32,14 @@ interface SkyBackgroundProps {
  * both. `useWindowDimensions()` also keeps it correct across rotation/
  * resize without a remount, unlike a one-time `onLayout` measurement.
  */
-export default function SkyBackground({ palette, gradientId }: SkyBackgroundProps) {
+export default function SkyBackground({ palette, gradientId: idPrefix }: SkyBackgroundProps) {
   const { width, height } = useWindowDimensions();
+  // SVG `id`s must be document-unique on web (react-native-web renders a
+  // real DOM `<svg>`). A per-screen constant is not enough: the native stack
+  // can hold two instances of the same screen, and `url(#id)` then resolves
+  // to the first — possibly hidden — copy, leaving this sky unpainted over
+  // the near-black fallback background (it read as a stuck night pass).
+  const gradientId = `${idPrefix}-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   return (
     <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>

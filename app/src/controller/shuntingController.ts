@@ -19,7 +19,6 @@ import { getBackendApi, globalDocId, type ScoreEntry } from './backendApi';
 import { fireHaptic } from './haptics';
 import { SoundManager } from '../audio/sounds';
 import { createFeedbackQueue } from './feedbackQueue';
-import { canReopenSummary, isSummaryVisible } from './summaryGate';
 import { motion } from '../../design/tokens';
 import {
   isRightLocoHintDone,
@@ -63,23 +62,12 @@ export interface UseShuntingControllerResult {
   localLeaderboard: ScoreEntry[];
   globalLeaderboard: ScoreEntry[];
   /**
-   * True once the winning move's board animation has landed AND the player
-   * hasn't dismissed the summary card yet. Drives both
-   * `WinSummaryCard.visible` and `ShuntingBoard.showCelebration` (dismissing
-   * stops the confetti too) — never flip these on `state.status` alone, or
+   * True once the winning move's board animation has landed. Drives both
+   * `WinSummaryCard.visible` and `ShuntingBoard.showCelebration` — never flip these on `state.status` alone, or
    * the card/confetti pop in at move START instead of when the wagons
-   * visibly arrive. See summaryGate.ts.
+   * visibly arrive.
    */
   summaryVisible: boolean;
-  /** True once the level is won but the card is currently hidden — drives a
-   *  small "RESULTADOS" reopen affordance in the HUD. */
-  canReopenSummary: boolean;
-  /** Closes the summary card (✕ button, tap-outside, or Android back) without
-   *  losing any win state — the level stays WON and the board keeps its
-   *  final state. Never re-fires a sound/haptic or resubmits the score. */
-  dismissSummary: () => void;
-  /** Brings the summary card back after it was dismissed, for the same win. */
-  reopenSummary: () => void;
   /** Pass to `ShuntingBoard.onAnimationComplete`. */
   onBoardAnimationComplete: () => void;
   /** True once the win-finalize leaderboard fetch has settled AND the
@@ -210,14 +198,8 @@ export function useShuntingController(levelId: number, playerName: string): UseS
   // Reveal gate. Stays false while status flips to WON at move-start; only
   // flips true once the board reports the winning move's travel+settle
   // animation has actually landed (or the fallback safety-net below fires).
-  // `summaryVisible`/`canReopenSummary` below (see summaryGate.ts) are what
-  // actually drive WinSummaryCard/board confetti — never this alone.
+  // Exposed as `summaryVisible` — drives WinSummaryCard/board confetti.
   const [celebrate, setCelebrate] = useState(false);
-  // True once the player has explicitly closed the summary card (✕, tap
-  // outside, or Android back) for the CURRENT win. Reset alongside
-  // `celebrate` on level change/restart so a fresh win always shows the card
-  // again — see the two effects below.
-  const [summaryDismissed, setSummaryDismissed] = useState(false);
 
   const startTimeRef = useRef(Date.now());
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -255,7 +237,6 @@ export function useShuntingController(levelId: number, playerName: string): UseS
     setGlobalLeaderboard([]);
     setOffline(false);
     setCelebrate(false);
-    setSummaryDismissed(false);
     startTimeRef.current = Date.now();
     winHandledRef.current = false;
     winFeedbackFiredRef.current = false;
@@ -428,7 +409,6 @@ export function useShuntingController(levelId: number, playerName: string): UseS
     setScoreResult(null);
     setOffline(false);
     setCelebrate(false);
-    setSummaryDismissed(false);
     startTimeRef.current = Date.now();
     winHandledRef.current = false;
     winFeedbackFiredRef.current = false;
@@ -437,14 +417,6 @@ export function useShuntingController(levelId: number, playerName: string): UseS
     // it must never play against the freshly-reset board.
     feedbackQueue.clear();
   }, [engine, feedbackQueue]);
-
-  // Closes the card without touching win state, sound, or the leaderboard
-  // fetch — those are all owned by the effects above, keyed off `celebrate`/
-  // `scoreResult`, and are unaffected by this flag. A late-arriving
-  // `scoreResult` after dismissal must NOT reopen the card (summaryVisible
-  // only depends on `celebrate`/`summaryDismissed`, never on scoreResult).
-  const dismissSummary = useCallback(() => setSummaryDismissed(true), []);
-  const reopenSummary = useCallback(() => setSummaryDismissed(false), []);
 
   const undo = useCallback(() => {
     if (state.moves <= 0 || state.won) return;
@@ -586,10 +558,7 @@ export function useShuntingController(levelId: number, playerName: string): UseS
     scoreResult,
     localLeaderboard,
     globalLeaderboard,
-    summaryVisible: isSummaryVisible(celebrate, summaryDismissed),
-    canReopenSummary: canReopenSummary(celebrate, summaryDismissed),
-    dismissSummary,
-    reopenSummary,
+    summaryVisible: celebrate,
     onBoardAnimationComplete,
     offline,
   };

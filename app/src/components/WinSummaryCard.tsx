@@ -32,12 +32,10 @@ interface WinSummaryCardProps {
    *  button, e.g. "Completé el Nivel 3 ... ". Omit/null to hide the button. */
   shareText?: string | null;
   /**
-   * Closes the card WITHOUT navigating or resubmitting anything — the ✕
-   * button, tapping the dimmed backdrop outside the card, and the Android
-   * hardware back button all call this. Owned by the controllers
-   * (`dismissSummary`/`summaryDismissed` — see summaryGate.ts) so the level
-   * stays WON/finished and the HUD behind becomes usable again; the card can
-   * be reopened via a small HUD affordance while `canReopenSummary` is true.
+   * The ✕ button, tapping the dimmed backdrop outside the card, and the
+   * Android hardware back button all call this. GameScreen wires it to the
+   * level menu: a won/finished board is never shown again after the card
+   * closes — the only way back into the level is REPETIR (a fresh start).
    */
   onDismiss: () => void;
   onRepeat: () => void;
@@ -54,8 +52,7 @@ interface WinSummaryCardProps {
  *
  * Dismissible (see `onDismiss`): the ✕ button in the top-right corner, a tap
  * on the dimmed backdrop outside the card, or the Android hardware back
- * button all close it without losing any information — the score/stars/
- * leaderboard stay computed, only the card's visibility changes.
+ * button all leave the level for the level menu.
  */
 export default function WinSummaryCard({
   visible,

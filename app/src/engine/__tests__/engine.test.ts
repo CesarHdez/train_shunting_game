@@ -319,6 +319,26 @@ describe('ClassificationEngine', () => {
     expect(engine.state.moves).toBe(3); // unchanged — rejection is free
   });
 
+  test('a pushed car enters at the track entry and shoves the standing cars deeper', () => {
+    const level: ClassificationLevel = {
+      id: 99,
+      name: 'entry order',
+      description: '',
+      arrivals: [['F-rojo', 'T-azul', 'V-verde']],
+      capacities: [3],
+    };
+    const engine = new ClassificationEngine(level);
+    engine.empujar(0);
+    engine.empujar(0);
+    expect(engine.state.clasif[0]).toEqual(['T-azul', 'F-rojo']);
+    engine.empujar(0);
+    expect(engine.state.clasif[0]).toEqual(['V-verde', 'T-azul', 'F-rojo']);
+    engine.state.finished = false; // reopen to exercise undo on the last push
+    engine.state.status = 'PLAYING';
+    engine.undo();
+    expect(engine.state.clasif[0]).toEqual(['T-azul', 'F-rojo']);
+  });
+
   test('auto-jumps viaSel to another non-empty arrival when the current one empties, and finishes the level', () => {
     const level: ClassificationLevel = {
       id: 2,

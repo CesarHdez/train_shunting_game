@@ -1,34 +1,26 @@
 {
   "id": 7,
-  "name": "Turno 7 · Yarda reducida",
-  "description": "3 vías de llegada · 4 destinos, 3 vías → 1 salto inevitable",
+  "name": "Turno 7 · Tres en una vía",
+  "description": "2 vías de llegada · 4 colores · 2 vías → 2 saltos inevitables · Cuatro colores en dos vías: tres comparten vía, en el orden justo",
   "arrivals": [
     [
-      "T-rojo",
-      "F-verde",
-      "C-azul",
+      "J-violeta",
+      "V-violeta",
+      "C-violeta",
       "J-ambar",
-      "V-rojo",
-      "T-verde"
+      "C-verde"
     ],
     [
-      "C-verde",
+      "T-ambar",
       "F-rojo",
-      "V-azul",
-      "J-rojo",
-      "T-ambar"
-    ],
-    [
+      "F-ambar",
       "C-rojo",
-      "F-azul",
-      "V-verde",
-      "J-azul",
-      "T-ambar"
+      "T-verde",
+      "V-verde"
     ]
   ],
   "capacities": [
-    5,
-    4,
-    7
+    3,
+    8
   ]
 }

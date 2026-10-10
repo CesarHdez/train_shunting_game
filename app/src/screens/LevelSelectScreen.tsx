@@ -189,7 +189,7 @@ export default function LevelSelectScreen({ navigation, route }: RootScreenProps
             hitSlop={8}
             onPress={() => {
               void fireHaptic('light');
-              navigation.navigate('ModeSelect');
+              navigation.popTo('ModeSelect');
             }}
             style={({ pressed }) => [
               styles.chip,

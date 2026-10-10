@@ -29,7 +29,7 @@ import { depthScaleWithMatrix, projectWithMatrix } from './iso/isoCamera';
 import { usePalette } from './iso/timeOfDay';
 import { useClassificationAnimation } from './motion/useClassificationAnimation';
 import type { ClassificationMoveAnim } from './motion/detectMove';
-import { buildPushWaypoints, getPosAt } from './motion/waypoints';
+import { buildPushWaypoints, getPosAt, type Waypoint } from './motion/waypoints';
 import { IsoSceneryZoneA } from './primitives/IsoScenery';
 import { IsoSky } from './primitives/IsoSky';
 import { IsoTrackBed } from './primitives/IsoTrackBed';
@@ -72,7 +72,94 @@ function Billboarded({
   );
 }
 
+/** Path of the car being pushed, as the standing cars it shoves need it. */
+interface PushPath {
+  waypoints: Waypoint[];
+  /** Where the ghost meets the standing cut: its landing x (forward) or start x (undo). */
+  contactX: number;
+  /** Plane distance between neighbouring car centres on a classification track. */
+  pitch: number;
+  reverse: boolean;
+}
+
+/**
+ * Plane `u` offset of the standing cars while a push runs, like a shunting
+ * cut: forward, they wait one pitch toward the entry (where they stood
+ * before the push) until the ghost reaches them, then ride with it to their
+ * new place; an undo pulls them one pitch toward the entry as the car
+ * leaves, then they decouple.
+ */
+function pushShift(path: PushPath, progress: number): number {
+  'worklet';
+  const t = Math.min(1, Math.max(0, progress));
+  const ghostX = getPosAt(path.waypoints, t).x;
+  // Only the stretch ON the classification track can touch the cut: the
+  // ghost's x elsewhere (the arrival head, the throat channel) says nothing
+  // about contact — the arrival head may even sit right of the entry slot.
+  if (path.reverse) {
+    // Undo: leg 0→1 runs along the classification track out to the throat.
+    if (t >= path.waypoints[1].t) return 0;
+    const pulled = Math.min(1, Math.max(0, (path.contactX - ghostX) / path.pitch));
+    return path.pitch * (1 - pulled);
+  }
+  // Forward: the last leg runs from the throat along the track to col 0.
+  const lastLeg = path.waypoints[path.waypoints.length - 2].t;
+  if (t <= lastLeg) return -path.pitch;
+  const pushed = Math.min(1, Math.max(0, (ghostX - (path.contactX - path.pitch)) / path.pitch));
+  return -path.pitch * (1 - pushed);
+}
+
+/**
+ * A standing car the arriving push shoves along its track: same anchoring as
+ * Billboarded, plus the per-frame pushShift. Mounted fresh for each move, so
+ * its first frame already reads the reset progress and the cut never flashes
+ * at its final place before the ghost gets there.
+ */
+function ShiftedBillboard({
+  layout,
+  u,
+  v,
+  width,
+  railY,
+  path,
+  progress,
+  children,
+}: {
+  layout: ClassificationLayout;
+  u: number;
+  v: number;
+  width: number;
+  railY: number;
+  path: PushPath;
+  progress: SharedValue<number>;
+  children: React.ReactNode;
+}) {
+  const matrix = useMemo(() => [...layout.camera.matrix], [layout.camera]);
+  const baseScale = layout.camera.scale;
+  const transform = useDerivedValue(() => {
+    const p = projectWithMatrix(matrix, u + pushShift(path, progress.value), v);
+    const s = depthScaleWithMatrix(matrix, baseScale, v);
+    return [{ translateX: p.x - (width * s) / 2 }, { translateY: p.y - railY * s }, { scale: s }];
+  }, [path, progress, matrix, baseScale, u, v, width, railY]);
+  return <Group transform={transform}>{children}</Group>;
+}
+
 // ─────────────────────────── Ghost layer ───────────────────────────
+
+/**
+ * Plane-space start/end of a push ghost. Forward: arrival head → the
+ * classification track's entry slot (col 0). Undo (move.reverse): the same
+ * path backwards. Shared by the ghost and by the standing cars it shoves.
+ */
+function pushEndpoints(move: ClassificationMoveAnim, layout: ClassificationLayout) {
+  const arrivalX = layout.arrCarX(0) + layout.arrCarWidth / 2;
+  const arrivalY = layout.arrY(move.fromArrival);
+  const clasifX = layout.clasCarX(move.dstCol) + layout.clasCarWidth / 2;
+  const clasifY = layout.clasY(move.toClasif);
+  return move.reverse
+    ? { x0: clasifX, y0: clasifY, x1: arrivalX, y1: arrivalY }
+    : { x0: arrivalX, y0: arrivalY, x1: clasifX, y1: clasifY };
+}
 
 function GhostPushCar({
   code,
@@ -87,6 +174,7 @@ function GhostPushCar({
   baseScale,
   progress,
   settle,
+  palette,
 }: {
   code: string;
   x0: number;
@@ -100,6 +188,7 @@ function GhostPushCar({
   baseScale: number;
   progress: SharedValue<number>;
   settle: SharedValue<number>;
+  palette: TimeOfDayPalette;
 }) {
   const waypoints = useMemo(() => buildPushWaypoints(x0, y0, x1, y1, channelX), [x0, y0, x1, y1, channelX]);
   // Evaluated in PLANE space and projected per frame, so the car shrinks as
@@ -114,7 +203,7 @@ function GhostPushCar({
 
   return (
     <Group transform={transform}>
-      <ClassificationWagon code={code} width={width} />
+      <ClassificationWagon code={code} width={width} palette={palette} />
     </Group>
   );
 }
@@ -151,17 +240,7 @@ function GhostLayer({
 }) {
   const matrix = useMemo(() => [...layout.camera.matrix], [layout.camera]);
   const channelX = layout.gutterThroatEnd;
-  const arrivalX = layout.arrCarX(0) + layout.arrCarWidth / 2;
-  const arrivalY = layout.arrY(move.fromArrival);
-  const clasifX = layout.clasCarX(move.dstCol) + layout.clasCarWidth / 2;
-  const clasifY = layout.clasY(move.toClasif);
-  // Forward push: arrival head → classif tail. Undo (move.reverse): the ghost
-  // runs backward, classif → arrival head — same waypoint machinery, just
-  // source/dest swapped (see detectMove.ts detectClassificationUndo).
-  const x0 = move.reverse ? clasifX : arrivalX;
-  const y0 = move.reverse ? clasifY : arrivalY;
-  const x1 = move.reverse ? arrivalX : clasifX;
-  const y1 = move.reverse ? arrivalY : clasifY;
+  const { x0, y0, x1, y1 } = pushEndpoints(move, layout);
   const width = move.reverse ? layout.arrCarWidth : layout.clasCarWidth;
   const railY = move.reverse ? layout.arrCarRailY : layout.clasCarRailY;
 
@@ -179,6 +258,7 @@ function GhostLayer({
       baseScale={layout.camera.scale}
       progress={progress}
       settle={settle}
+      palette={palette}
     />
   );
 }
@@ -285,7 +365,7 @@ function ArrivalRow({
               width={layout.arrCarWidth}
               railY={layout.arrCarRailY}
             >
-              <ClassificationWagon code={code} width={layout.arrCarWidth} highlighted={isActive && j === 0} />
+              <ClassificationWagon code={code} width={layout.arrCarWidth} highlighted={isActive && j === 0} palette={palette} />
             </Billboarded>
           );
         })
@@ -300,6 +380,8 @@ function ClassificationRow({
   cars,
   capacity,
   hiddenCol,
+  push,
+  progress,
   palette,
 }: {
   layout: ClassificationLayout;
@@ -308,6 +390,9 @@ function ClassificationRow({
   capacity: number;
   /** Column to hide while its push ghost is still in flight (-1 = none). */
   hiddenCol: number;
+  /** Set while a push (or its undo) runs on this row: every visible car rides with it. */
+  push: PushPath | null;
+  progress: SharedValue<number>;
   palette: TimeOfDayPalette;
 }) {
   const v = layout.clasY(idx);
@@ -329,44 +414,28 @@ function ClassificationRow({
 
   return (
     <Group>
-      {/* Empty-slot outlines, billboarded so they read as standing car-shaped
-          holes rather than lozenges smeared across the ballast. */}
-      {Array.from({ length: Math.max(0, capacity - visibleCount) }).map((_, k) => {
-        const j = cars.length + k;
-        return (
-          <Billboarded
-            key={`slot-${j}`}
-            layout={layout}
-            u={layout.clasCarX(j) + layout.clasCarWidth / 2}
-            v={v}
-            width={layout.clasCarWidth}
-            railY={layout.clasCarRailY}
-          >
-            <Rect
-              x={2}
-              y={layout.clasCarRailY * 0.18}
-              width={layout.clasCarWidth - 4}
-              height={layout.clasCarRailY * 0.62}
-              style="stroke"
-              strokeWidth={1.5}
-              color="rgba(255,255,255,0.16)"
-            />
-          </Billboarded>
-        );
-      })}
-
+      {/* No per-slot outlines: the track keeps its full length and the
+          capacity reads only from the n/cap readout at its far end. */}
       {cars.map((code, j) => {
         if (j === hiddenCol) return null;
-        return (
-          <Billboarded
-            key={j}
+        const u = layout.clasCarX(j) + layout.clasCarWidth / 2;
+        const wagon = <ClassificationWagon code={code} width={layout.clasCarWidth} palette={palette} />;
+        return push ? (
+          <ShiftedBillboard
+            key={`push-${j}`}
             layout={layout}
-            u={layout.clasCarX(j) + layout.clasCarWidth / 2}
+            u={u}
             v={v}
             width={layout.clasCarWidth}
             railY={layout.clasCarRailY}
+            path={push}
+            progress={progress}
           >
-            <ClassificationWagon code={code} width={layout.clasCarWidth} />
+            {wagon}
+          </ShiftedBillboard>
+        ) : (
+          <Billboarded key={j} layout={layout} u={u} v={v} width={layout.clasCarWidth} railY={layout.clasCarRailY}>
+            {wagon}
           </Billboarded>
         );
       })}
@@ -461,6 +530,19 @@ export function ClassificationBoard({
   );
 
   const { move, progress, settle, flash, boardFade } = useClassificationAnimation(state, prevState, onAnimationComplete);
+
+  // The cars already standing on the destination track ride with the push
+  // (see pushShift); built once per move, shared by every car it shoves.
+  const pushPath = useMemo<PushPath | null>(() => {
+    if (!move) return null;
+    const { x0, y0, x1, y1 } = pushEndpoints(move, layout);
+    return {
+      waypoints: buildPushWaypoints(x0, y0, x1, y1, layout.gutterThroatEnd),
+      contactX: move.reverse ? x0 : x1,
+      pitch: layout.clasCarX(1) - layout.clasCarX(0),
+      reverse: !!move.reverse,
+    };
+  }, [move, layout]);
 
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -597,6 +679,8 @@ export function ClassificationBoard({
                   // reverse ghost departs FROM this row, and the engine has
                   // already removed that car from `state.clasif` by now.
                   hiddenCol={move && !move.reverse && move.toClasif === i ? move.dstCol : -1}
+                  push={move && move.toClasif === i ? pushPath : null}
+                  progress={progress}
                   palette={palette}
                 />
                 <Group

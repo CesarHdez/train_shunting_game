@@ -1,21 +1,23 @@
 {
   "id": 2,
-  "name": "Turno 2 · Sin margen",
-  "description": "1 vía de llegada · 2 destinos · capacidad exacta",
+  "name": "Turno 2 · Tres destinos",
+  "description": "1 vía de llegada · 3 colores · 3 vías · Capacidad exacta: mira cuántos carros trae cada color",
   "arrivals": [
     [
-      "T-rojo",
-      "F-azul",
-      "V-rojo",
-      "C-azul",
-      "J-rojo",
+      "T-violeta",
       "T-azul",
-      "F-rojo",
-      "V-azul"
+      "V-violeta",
+      "J-azul",
+      "V-azul",
+      "C-ambar",
+      "T-ambar",
+      "J-ambar",
+      "T-ambar"
     ]
   ],
   "capacities": [
+    3,
     4,
-    4
+    2
   ]
 }

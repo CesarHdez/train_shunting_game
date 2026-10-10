@@ -60,6 +60,7 @@ if (process.env.SKIP === '1') {
   await wait(900);
 }
 await wait(1200);
+if (process.env.TAPS) { for (const [x, y] of JSON.parse(process.env.TAPS)) { await page.mouse.click(x, y); await wait(2200); } }
 const CLIP = process.env.CLIP ? JSON.parse(process.env.CLIP) : undefined;
 await page.screenshot({ path: path.join(OUT, NAME), clip: CLIP });
 console.log('shot saved: ' + NAME);

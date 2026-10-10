@@ -1,27 +1,22 @@
 {
   "id": 4,
-  "name": "Turno 4 · Encaje perfecto",
-  "description": "2 vías de llegada · 3 destinos · capacidad exacta",
+  "name": "Turno 4 · Tres colores, dos vías",
+  "description": "1 vía de llegada · 3 colores · 2 vías → 1 salto inevitable · Una vía debe llevar dos colores: decide cuál entra primero",
   "arrivals": [
     [
-      "T-verde",
       "F-rojo",
-      "C-azul",
-      "F-verde",
+      "T-ambar",
       "J-rojo",
-      "V-azul"
-    ],
-    [
-      "C-rojo",
-      "T-azul",
-      "F-verde",
-      "V-rojo",
-      "J-azul"
+      "T-rojo",
+      "T-ambar",
+      "V-violeta",
+      "V-ambar",
+      "V-violeta",
+      "F-violeta"
     ]
   ],
   "capacities": [
-    4,
-    3,
-    4
+    6,
+    6
   ]
 }

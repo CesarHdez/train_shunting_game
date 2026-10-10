@@ -9,7 +9,6 @@ import Toast from '../components/hud/Toast';
 import TutorialOverlay from '../components/TutorialOverlay';
 import RightLocoHint from '../components/RightLocoHint';
 import WinSummaryCard from '../components/WinSummaryCard';
-import ResultsChip from '../components/ResultsChip';
 import { TrophyIcon } from '../components/icons';
 import { formatTime, readableIdentityColor, starsGlyph } from '../components/copy';
 import { useShuntingController } from '../controller/shuntingController';
@@ -88,7 +87,7 @@ function ShuntingGameScreen({
   const boardWidth = canvasSize.width > 0 ? Math.min(canvasSize.width, layout.playAreaMaxWidth) : 0;
   const boardHeight = canvasSize.height > 0 ? Math.min(canvasSize.height, layout.playAreaMaxHeight) : 0;
 
-  const goMenu = () => navigation.navigate('LevelSelect', { mode: 'shunting' });
+  const goMenu = () => navigation.popTo('LevelSelect', { mode: 'shunting' });
 
   const locoLimitBadge = isFinite(ctrl.state.locoLimit)
     ? `MÁX ${ctrl.state.locoLimit} VAGÓN${ctrl.state.locoLimit > 1 ? 'ES' : ''} / MANIOBRA`
@@ -148,7 +147,6 @@ function ShuntingGameScreen({
         ) : null}
         <TutorialOverlay step={ctrl.tutorialStep} onAdvanceModal={ctrl.tutorialAdvanceModal} onSkip={ctrl.tutorialSkip} />
         <RightLocoHint visible={ctrl.showRightLocoHint} onDismiss={ctrl.dismissRightLocoHint} />
-        <ResultsChip visible={ctrl.canReopenSummary} onPress={ctrl.reopenSummary} />
         <Toast message={ctrl.toastMessage} bottomOffset={spacing.sm} />
       </View>
 
@@ -159,7 +157,7 @@ function ShuntingGameScreen({
 
       <WinSummaryCard
         visible={ctrl.summaryVisible}
-        onDismiss={ctrl.dismissSummary}
+        onDismiss={goMenu}
         title={`¡NIVEL ${levelId} COMPLETADO!`}
         stars={ctrl.scoreResult?.stars ?? 1}
         isNewRecord={ctrl.scoreResult?.isNewRecord ?? false}
@@ -229,7 +227,7 @@ function ClassificationGameScreen({
   const boardWidth = canvasSize.width > 0 ? Math.min(canvasSize.width, layout.playAreaMaxWidth) : 0;
   const boardHeight = canvasSize.height > 0 ? Math.min(canvasSize.height, layout.playAreaMaxHeight) : 0;
 
-  const goMenu = () => navigation.navigate('LevelSelect', { mode: 'classification' });
+  const goMenu = () => navigation.popTo('LevelSelect', { mode: 'classification' });
 
   const selectedArrival = ctrl.state.arrivals[ctrl.state.viaSel];
   const nextCar = selectedArrival && selectedArrival.length > 0 ? selectedArrival[0] : null;
@@ -300,7 +298,6 @@ function ClassificationGameScreen({
           hintText={clfTutorialHintText}
           skipLabel={CLF_TUTORIAL_MODAL_COPY.skipLabel}
         />
-        <ResultsChip visible={ctrl.canReopenSummary} onPress={ctrl.reopenSummary} />
         <Toast message={ctrl.toastMessage} bottomOffset={spacing.sm} />
       </View>
 
@@ -308,7 +305,7 @@ function ClassificationGameScreen({
 
       <WinSummaryCard
         visible={ctrl.summaryVisible}
-        onDismiss={ctrl.dismissSummary}
+        onDismiss={goMenu}
         title={level?.name ?? `TURNO ${levelId}`}
         stars={ctrl.scoreResult?.stars ?? 1}
         isNewRecord={ctrl.scoreResult?.isNewRecord ?? false}

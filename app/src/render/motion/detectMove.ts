@@ -294,7 +294,7 @@ export interface ClassificationMoveAnim {
   fromArrival: number;
   toClasif: number;
   label: string;
-  /** Exact destination column (classification tracks only ever append). */
+  /** Exact destination column: always 0, cars enter at the track's entry end. */
   dstCol: number;
   /**
    * True for an UNDO's reverse animation: the ghost travels FROM the
@@ -322,8 +322,8 @@ export function detectClassificationMove(
 
   for (let i = 0; i < curr.clasif.length; i++) {
     const prevLen = prev.clasif[i]?.length ?? 0;
-    if (curr.clasif[i].length === prevLen + 1 && curr.clasif[i][prevLen] === label) {
-      return { fromArrival, toClasif: i, label, dstCol: prevLen };
+    if (curr.clasif[i].length === prevLen + 1 && curr.clasif[i][0] === label) {
+      return { fromArrival, toClasif: i, label, dstCol: 0 };
     }
   }
   return null;
@@ -333,7 +333,8 @@ export function detectClassificationMove(
  * Detect a single UNDO of a classification push: `prev` is the POST-push
  * state (about to be undone), `curr` is the RESTORED pre-push state
  * `ClassificationEngine.undo()` just produced. `empujar()` always pops the
- * arrival's HEAD (index 0) and PUSHES onto the classification track's TAIL,
+ * arrival's HEAD (index 0) and inserts it at the classification track's
+ * ENTRY end (index 0),
  * so the reverse is unambiguous: find the classif track that shrank by one
  * car and the arrival track that grew by one (matching label, landing back
  * at its head) — same diffing approach as detectShuntingUndo, just simpler
@@ -353,13 +354,13 @@ export function detectClassificationUndo(
     const prevLen = prev.clasif[i]?.length ?? 0;
     const currLen = curr.clasif[i]?.length ?? 0;
     if (currLen !== prevLen - 1) continue;
-    const label = prev.clasif[i][prevLen - 1];
+    const label = prev.clasif[i][0];
 
     for (let j = 0; j < curr.arrivals.length; j++) {
       const cArr = curr.arrivals[j] ?? [];
       const pArr = prev.arrivals[j] ?? [];
       if (cArr.length === pArr.length + 1 && cArr[0] === label) {
-        return { fromArrival: j, toClasif: i, label, dstCol: prevLen - 1, reverse: true };
+        return { fromArrival: j, toClasif: i, label, dstCol: 0, reverse: true };
       }
     }
   }

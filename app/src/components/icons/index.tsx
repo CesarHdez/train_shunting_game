@@ -164,8 +164,7 @@ export const BackIcon: React.FC<IconProps> = ({ size = DEFAULT_SIZE, color = DEF
 
 /**
  * Material Symbols "schedule" (clock face + hands) — used for the
- * "AUTOMÁTICO · {franja}" badge on Login and the HORA DEL PATIO row in
- * Settings. Source:
+ * HORA DEL PATIO row in Settings. Source:
  * https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/schedule/materialsymbolsoutlined/schedule_24px.svg
  */
 export const ClockIcon: React.FC<IconProps> = ({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }) => (

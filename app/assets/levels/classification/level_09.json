@@ -1,40 +1,30 @@
 {
   "id": 9,
-  "name": "Turno 9 · Consolidación mayor",
-  "description": "4 vías de llegada · 5 destinos, 3 vías → 2 saltos inevitables",
+  "name": "Turno 9 · Consolidación",
+  "description": "3 vías de llegada · 5 colores · 2 vías → 3 saltos inevitables · Cinco colores en solo dos vías",
   "arrivals": [
     [
-      "F-rojo",
-      "T-azul",
-      "V-verde",
-      "C-ambar",
-      "J-violeta"
-    ],
-    [
-      "C-rojo",
-      "F-azul",
-      "V-verde",
-      "J-ambar",
-      "T-violeta"
-    ],
-    [
-      "T-rojo",
-      "C-azul",
-      "F-verde",
-      "V-ambar",
-      "J-violeta"
-    ],
-    [
-      "J-rojo",
-      "T-azul",
       "C-verde",
-      "F-ambar",
-      "V-violeta"
+      "C-azul",
+      "F-azul",
+      "V-rojo",
+      "F-violeta"
+    ],
+    [
+      "T-azul",
+      "J-verde",
+      "F-rojo",
+      "V-ambar",
+      "C-violeta"
+    ],
+    [
+      "J-azul",
+      "V-verde",
+      "C-ambar"
     ]
   ],
   "capacities": [
-    4,
-    4,
-    12
+    9,
+    4
   ]
 }
